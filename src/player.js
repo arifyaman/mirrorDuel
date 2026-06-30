@@ -12,7 +12,7 @@ export class Player {
     this.intersection = new Vec3();
 
     this.entity = new Entity('player');
-    this.entity.addComponent('render', { type: 'box' });
+    this.entity.addComponent('render', { type: 'box', castShadows: true });
 
     const material = new StandardMaterial();
     material.diffuse = new Color(1, 0, 0);

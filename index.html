@@ -40,7 +40,7 @@ window.addEventListener('resize', () => app.resizeCanvas());
 app.automaticallyManageScenes = false;
 
 const floor = new Entity('floor');
-floor.addComponent('render', { type: 'box' });
+floor.addComponent('render', { type: 'box', castShadows: true, receiveShadows: true });
 floor.setLocalScale(10, 0.1, 10);
 floor.setPosition(0, -0.5, 0);
 app.root.addChild(floor);
@@ -55,10 +55,26 @@ camera.lookAt(new Vec3(0, 0, 0));
 
 const player = new Player(app, canvas, cameraComponent);
 
-const light = new Entity('light');
-light.addComponent('light');
-app.root.addChild(light);
-light.setEulerAngles(45, 0, 0);
+const sunLight = new Entity('sun');
+const sunComponent = sunLight.addComponent('light', {
+  type: 'directional',
+  castShadows: true,
+  shadowResolution: 2048,
+  shadowDistance: 30,
+  shadowBias: 0.0002,
+  normalOffsetBias: 0.001,
+  intensity: 2
+});
+app.root.addChild(sunLight);
+sunLight.setEulerAngles(40, 30, 0);
+
+const ambientLight = new Entity('ambient');
+const ambientComponent = ambientLight.addComponent('light', {
+  type: 'ambient',
+  diffuse: new Color(0.3, 0.3, 0.4),
+  specular: new Color(0.5, 0.5, 0.5)
+});
+app.root.addChild(ambientLight);
 
 app.on('update', dt => {
   player.update(dt);
