@@ -1,4 +1,4 @@
-import { Entity, Color, StandardMaterial, Vec3, Ray, Quat, BlendFactor } from 'playcanvas';
+import { Entity, Color, StandardMaterial, Vec3, Ray } from 'playcanvas';
 
 class Projectile {
   constructor(app, start, direction) {
@@ -15,9 +15,9 @@ class Projectile {
     this.entity.setLocalScale(0.08, 0.08, 0.08);
 
     const mat = new StandardMaterial();
-    mat.emissive = new Color(1, 0.8, 0.2);
-    mat.emissiveIntensity = 2;
-    mat.diffuse = new Color(1, 0.5, 0);
+    mat.emissive = new Color(0, 1, 0);
+    mat.emissiveIntensity = 3;
+    mat.diffuse = new Color(0, 0.8, 0);
     mat.update();
     this.entity.render.material = mat;
 
@@ -221,9 +221,10 @@ export class Player {
 
   shoot() {
     const pos = this.entity.getPosition();
-    const forward = new Vec3(0, 0, -1);
-    forward.applyQuaternion(this.entity.getWorldQuat());
-    forward.y = 0.2;
+    const dx = this.intersection.x - pos.x;
+    const dz = this.intersection.z - pos.z;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    const forward = new Vec3(dx / len, 0.2, dz / len);
     forward.normalize();
 
     const startPos = new Vec3(
