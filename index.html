@@ -23,14 +23,21 @@ import {
 import { Player } from './src/player.js';
 
 const canvas = document.createElement('canvas');
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
 document.body.appendChild(canvas);
 
-const app = new Application(canvas);
+const app = new Application(canvas, {
+  graphicsDeviceOptions: {
+    antialias: true
+  }
+});
 
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);
 
 window.addEventListener('resize', () => app.resizeCanvas());
+
+app.automaticallyManageScenes = false;
 
 const floor = new Entity('floor');
 floor.addComponent('render', { type: 'box' });
