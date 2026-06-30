@@ -1,111 +1,5 @@
 import { Entity, Color, StandardMaterial, Vec3, Ray } from 'playcanvas';
 
-class Projectile {
-  constructor(app, start, direction) {
-    this.app = app;
-    this.life = 0;
-    this.maxLife = 0.4;
-    this.speed = 10;
-    this.traveled = 0;
-    this.maxDistance = 3;
-    this.alive = true;
-
-    this.entity = new Entity('projectile');
-    this.entity.addComponent('render', { type: 'sphere', segmentAxis: 'y' });
-    this.entity.setLocalScale(0.08, 0.08, 0.08);
-
-    const mat = new StandardMaterial();
-    mat.emissive = new Color(0, 1, 0);
-    mat.emissiveIntensity = 3;
-    mat.diffuse = new Color(0, 0.8, 0);
-    mat.update();
-    this.entity.render.material = mat;
-
-    this.entity.setPosition(start);
-    this.direction = direction;
-    this.app.root.addChild(this.entity);
-
-    this.particles = [];
-  }
-
-  update(dt) {
-    if (!this.alive) return;
-
-    const move = this.speed * dt;
-    this.entity.setPosition(
-      this.entity.getPosition().x + this.direction.x * move,
-      this.entity.getPosition().y + this.direction.y * move,
-      this.entity.getPosition().z + this.direction.z * move
-    );
-    this.traveled += move;
-    this.life += dt;
-
-    const scale = 1 - this.life / this.maxLife;
-    this.entity.setLocalScale(0.08 * scale, 0.08 * scale, 0.08 * scale);
-
-    if (this.particles.length > 0) {
-      for (let i = this.particles.length - 1; i >= 0; i--) {
-        const p = this.particles[i];
-        p.life -= dt;
-        if (p.life <= 0) {
-          p.entity.destroy();
-          this.particles.splice(i, 1);
-        } else {
-          const alpha = p.life / p.maxLife;
-          p.material.opacity = alpha;
-          p.scale = alpha;
-        }
-      }
-    }
-
-    if (this.traveled >= this.maxDistance || this.life >= this.maxLife) {
-      this.explode();
-      this.alive = false;
-    }
-  }
-
-  spawnParticle() {
-    const pos = this.entity.getPosition();
-    const particle = new Entity();
-    particle.addComponent('render', { type: 'sphere' });
-    particle.setLocalScale(0.03, 0.03, 0.03);
-
-    const mat = new StandardMaterial();
-    mat.blend = true;
-    mat.opacity = 1;
-    mat.emissive = new Color(1, 0.6 + Math.random() * 0.4, 0);
-    mat.emissiveIntensity = 1.5;
-    mat.update();
-    particle.render.material = mat;
-
-    particle.setPosition(
-      pos.x + (Math.random() - 0.5) * 0.1,
-      pos.y + (Math.random() - 0.5) * 0.1,
-      pos.z + (Math.random() - 0.5) * 0.1
-    );
-
-    particle.life = 0.3;
-    particle.maxLife = 0.3;
-    particle.material = mat;
-    particle.scale = 1;
-
-    this.app.root.addChild(particle);
-    this.particles.push(particle);
-  }
-
-  explode() {
-    for (let i = 0; i < 8; i++) {
-      this.spawnParticle();
-    }
-    this.entity.destroy();
-  }
-
-  destroy() {
-    this.entity.destroy();
-    this.particles.forEach(p => p.destroy());
-  }
-}
-
 export class Player {
   constructor(app, canvas, cameraComponent) {
     this.app = app;
@@ -134,15 +28,7 @@ export class Player {
     window.addEventListener('keydown', e => this.keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => this.keys[e.key.toLowerCase()] = false);
 
-    this.projectiles = [];
-
-    this.canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) {
-        this.shoot();
-      }
-    });
-
-    this.canvas.addEventListener('mousemove', (e) => {
+ this.canvas.addEventListener('mousemove', (e) => {
       this.raycastToPlane(e);
     });
   }
@@ -207,33 +93,5 @@ export class Player {
     this.entity.setPosition(pos);
 
     this.entity.lookAt(lookTarget);
-
-    for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      const p = this.projectiles[i];
-      p.update(dt);
-      p.spawnParticle();
-      if (!p.alive) {
-        p.destroy();
-        this.projectiles.splice(i, 1);
-      }
-    }
-  }
-
-  shoot() {
-    const pos = this.entity.getPosition();
-    const dx = this.intersection.x - pos.x;
-    const dz = this.intersection.z - pos.z;
-    const len = Math.sqrt(dx * dx + dz * dz);
-    const forward = new Vec3(dx / len, 0.2, dz / len);
-    forward.normalize();
-
-    const startPos = new Vec3(
-      pos.x + forward.x * 0.3,
-      pos.y + 0.1,
-      pos.z + forward.z * 0.3
-    );
-
-    const proj = new Projectile(this.app, startPos, forward);
-    this.projectiles.push(proj);
   }
 }
