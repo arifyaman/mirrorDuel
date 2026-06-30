@@ -57,19 +57,41 @@ export class Player {
       this.targetPos = this.entity.getPosition().clone();
     }
 
-    if (this.keys['w']) this.targetPos.z -= this.speed * dt;
-    if (this.keys['s']) this.targetPos.z += this.speed * dt;
-    if (this.keys['a']) this.targetPos.x -= this.speed * dt;
-    if (this.keys['d']) this.targetPos.x += this.speed * dt;
-
     const pos = this.entity.getPosition();
+    const lookTarget = new Vec3(this.intersection.x, pos.y, this.intersection.z);
+
+    const cameraEntity = this.cameraComponent.camera.node;
+    const cameraForward = cameraEntity.forward.clone();
+    cameraForward.y = 0;
+    cameraForward.normalize();
+    
+    const cameraRight = new Vec3(-cameraForward.z, 0, cameraForward.x);
+    cameraRight.normalize();
+
+    const moveX = (this.keys['d'] ? 1 : 0) - (this.keys['a'] ? 1 : 0);
+    const moveZ = (this.keys['w'] ? 1 : 0) - (this.keys['s'] ? 1 : 0);
+
+    if (moveX !== 0 || moveZ !== 0) {
+      const moveDir = new Vec3(
+        cameraForward.x * moveZ + cameraRight.x * moveX,
+        0,
+        cameraForward.z * moveZ + cameraRight.z * moveX
+      ).normalize();
+
+      const playerForward = new Vec3(lookTarget.x - pos.x, 0, lookTarget.z - pos.z).normalize();
+      const alignment = moveDir.x * playerForward.x + moveDir.z * playerForward.z;
+      const speedMultiplier = 0.75 + 0.25 * alignment;
+
+      this.targetPos.x += moveDir.x * this.speed * speedMultiplier * dt;
+      this.targetPos.z += moveDir.z * this.speed * speedMultiplier * dt;
+    }
+
     const alpha = 1 - Math.exp(-this.lerpFactor * dt);
     pos.x += (this.targetPos.x - pos.x) * alpha;
     pos.y += (this.targetPos.y - pos.y) * alpha;
     pos.z += (this.targetPos.z - pos.z) * alpha;
     this.entity.setPosition(pos);
 
-    const lookTarget = new Vec3(this.intersection.x, pos.y, this.intersection.z);
     this.entity.lookAt(lookTarget);
   }
 }
