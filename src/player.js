@@ -6,6 +6,8 @@ export class Player {
     this.canvas = canvas;
     this.cameraComponent = cameraComponent;
     this.speed = 5;
+    this.lerpFactor = 8;
+    this.targetPos = null;
     this.ray = new Ray();
     this.intersection = new Vec3();
 
@@ -51,16 +53,23 @@ export class Player {
   }
 
   update(dt) {
-    const pos = this.entity.getPosition();
-    const newPos = new Vec3(pos.x, pos.y, pos.z);
-    if (this.keys['w']) newPos.z -= this.speed * dt;
-    if (this.keys['s']) newPos.z += this.speed * dt;
-    if (this.keys['a']) newPos.x -= this.speed * dt;
-    if (this.keys['d']) newPos.x += this.speed * dt;
-    this.entity.setPosition(newPos);
+    if (!this.targetPos) {
+      this.targetPos = this.entity.getPosition().clone();
+    }
 
-    const lookTarget = new Vec3(this.intersection.x, newPos.y, this.intersection.z);
+    if (this.keys['w']) this.targetPos.z -= this.speed * dt;
+    if (this.keys['s']) this.targetPos.z += this.speed * dt;
+    if (this.keys['a']) this.targetPos.x -= this.speed * dt;
+    if (this.keys['d']) this.targetPos.x += this.speed * dt;
+
+    const pos = this.entity.getPosition();
+    const alpha = 1 - Math.exp(-this.lerpFactor * dt);
+    pos.x += (this.targetPos.x - pos.x) * alpha;
+    pos.y += (this.targetPos.y - pos.y) * alpha;
+    pos.z += (this.targetPos.z - pos.z) * alpha;
+    this.entity.setPosition(pos);
+
+    const lookTarget = new Vec3(this.intersection.x, pos.y, this.intersection.z);
     this.entity.lookAt(lookTarget);
-    console.log('Player: ' + newPos.x + ', ' + newPos.z + ' | Look target: ' + this.intersection.x + ', ' + this.intersection.y + ', ' + this.intersection.z);
   }
 }
