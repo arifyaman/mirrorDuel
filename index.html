@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlayCanvas Hello World</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <script type="module">
+import {
+  Application,
+  Color,
+  Entity,
+  FILLMODE_FILL_WINDOW,
+  RESOLUTION_AUTO,
+  Vec3
+} from 'playcanvas';
+import { Player } from './src/player.js';
+
+const canvas = document.createElement('canvas');
+document.body.appendChild(canvas);
+
+const app = new Application(canvas);
+
+app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
+app.setCanvasResolution(RESOLUTION_AUTO);
+
+window.addEventListener('resize', () => app.resizeCanvas());
+
+const floor = new Entity('floor');
+floor.addComponent('render', { type: 'box' });
+floor.setLocalScale(10, 0.1, 10);
+floor.setPosition(0, -0.5, 0);
+app.root.addChild(floor);
+
+const camera = new Entity('camera');
+const cameraComponent = camera.addComponent('camera', {
+  clearColor: new Color(0.1, 0.2, 0.3)
+});
+app.root.addChild(camera);
+camera.setPosition(0, 10, 10);
+camera.lookAt(new Vec3(0, 0, 0));
+
+const player = new Player(app, canvas, cameraComponent);
+
+const light = new Entity('light');
+light.addComponent('light');
+app.root.addChild(light);
+light.setEulerAngles(45, 0, 0);
+
+app.on('update', dt => {
+  player.update(dt);
+});
+
+app.start();
+    </script>
+</body>
+</html>
