@@ -18,6 +18,7 @@ import {
   Entity,
   FILLMODE_FILL_WINDOW,
   RESOLUTION_AUTO,
+  StandardMaterial,
   Vec3
 } from 'playcanvas';
 import { Player } from './src/player.js';
@@ -40,9 +41,15 @@ window.addEventListener('resize', () => app.resizeCanvas());
 app.automaticallyManageScenes = false;
 
 const floor = new Entity('floor');
-floor.addComponent('render', { type: 'box' });
+const floorRender = floor.addComponent('render', { type: 'box' });
 floor.setLocalScale(10, 0.1, 10);
 floor.setPosition(0, -0.5, 0);
+
+const floorMaterial = new StandardMaterial();
+floorMaterial.diffuse = new Color(0.3, 0.3, 0.3);
+floorMaterial.update();
+floorRender.material = floorMaterial;
+
 app.root.addChild(floor);
 
 const camera = new Entity('camera');
@@ -63,6 +70,21 @@ const sunComponent = sunLight.addComponent('light', {
 app.root.addChild(sunLight);
 sunLight.setEulerAngles(40, 30, 0);
 sunLight.setPosition(-15, 40, -15);
+
+const lightColor = new Color(1, 1, 1);
+const light = new Entity();
+light.addComponent('light', {
+    type: 'directional',
+    color: lightColor,
+    intensity: 1,
+    range: 700,
+    shadowResolution: 4096,
+    shadowDistance: 600,
+    castShadows: true,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.05
+});
+app.root.addChild(light);
 
 app.on('update', dt => {
   player.update(dt);
