@@ -22,6 +22,18 @@ export class Player {
     this.entity.setPosition(0, -0.20, 0);
     this.entity.setLocalScale(0.5, 0.5, 0.5);
 
+    const stripMaterial = new StandardMaterial();
+    stripMaterial.diffuse = new Color(0, 1, 0);
+    stripMaterial.update();
+
+    this.forwardStrip = new Entity('forwardStrip');
+    this.forwardStrip.addComponent('render', { type: 'box' });
+    this.forwardStrip.render.material = stripMaterial;
+    this.forwardStrip.setLocalScale(1.1, 1.1, 0.2);
+    this.forwardStrip.setPosition(0, 0, -0.3);
+
+    this.entity.addChild(this.forwardStrip);
+
     app.root.addChild(this.entity);
 
     this.keys = {};
