@@ -88,11 +88,16 @@ export class ProjectileSkill extends Skill {
       p.enabled = true;
       p.setPosition(startPos.x, startPos.y, startPos.z);
 
-      // Each particle gets unique random velocity direction
+      // Bias velocity toward projectile direction with randomness
+      const spread = 0.8;
+      const rx = (Math.random() - 0.5) * 2;
+      const ry = (Math.random() - 0.5) * 2;
+      const rz = (Math.random() - 0.5) * 2;
+
       p._vel = {
-        x: (Math.random() - 0.5) * 2,
-        y: (Math.random() - 0.5) * 2,
-        z: (Math.random() - 0.5) * 2
+        x: this.projectileDir.x * (1 - spread) + rx * spread,
+        y: this.projectileDir.y * (1 - spread) + ry * spread,
+        z: this.projectileDir.z * (1 - spread) + rz * spread
       };
 
       // Normalize velocity to get pure direction
