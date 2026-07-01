@@ -64,14 +64,6 @@ app.root.addChild(sunLight);
 sunLight.setEulerAngles(40, 30, 0);
 sunLight.setPosition(-15, 40, -15);
 
-const ambientLight = new Entity('ambient');
-const ambientComponent = ambientLight.addComponent('light', {
-  type: 'ambient',
-  diffuse: new Color(0.3, 0.3, 0.4),
-  specular: new Color(0.5, 0.5, 0.5)
-});
-app.root.addChild(ambientLight);
-
 app.on('update', dt => {
   player.update(dt);
 });
