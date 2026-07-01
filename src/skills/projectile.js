@@ -13,7 +13,7 @@ export class ProjectileSkill extends Skill {
     this.projectileEntity = null;
     this.burstParticles = [];
     this.maxBurstParticles = 20;
-    this.burstSpeed = 3;
+    this.burstSpeed = 8;
     this.burstDuration = 1.5;
   }
 
@@ -82,81 +82,88 @@ export class ProjectileSkill extends Skill {
     this.projectileDir = new Vec3(forward.x, forward.y, forward.z);
     this.projectileTraveled = 0;
 
-    // Set all particles to spawn from the same point
-    for (let i = 0; i < this.burstParticles.length; i++) {
-      const p = this.burstParticles[i];
-      p.enabled = true;
-      p.setPosition(startPos.x, startPos.y, startPos.z);
+    // Reset and set all particles to spawn from the same point
+      for (let i = 0; i < this.burstParticles.length; i++) {
+        const p = this.burstParticles[i];
+        p.enabled = true;
+        p.setPosition(startPos.x, startPos.y, startPos.z);
 
-      // Bias velocity toward projectile direction with randomness
-      const spread = 0.8;
-      const rx = (Math.random() - 0.5) * 2;
-      const ry = (Math.random() - 0.5) * 2;
-      const rz = (Math.random() - 0.5) * 2;
+        // Bias velocity toward projectile direction with randomness
+        const spread = 0.2;
+        const rx = (Math.random() - 0.5) * 2;
+        const ry = (Math.random() - 0.5) * 2;
+        const rz = (Math.random() - 0.5) * 2;
 
-      p._vel = {
-        x: this.projectileDir.x * (1 - spread) + rx * spread,
-        y: this.projectileDir.y * (1 - spread) + ry * spread,
-        z: this.projectileDir.z * (1 - spread) + rz * spread
-      };
+        p._vel = {
+          x: this.projectileDir.x * (1 - spread) + rx * spread,
+          y: this.projectileDir.y * (1 - spread) + ry * spread,
+          z: this.projectileDir.z * (1 - spread) + rz * spread
+        };
 
-      // Normalize velocity to get pure direction
-      const len = Math.sqrt(p._vel.x * p._vel.x + p._vel.y * p._vel.y + p._vel.z * p._vel.z);
-      if (len > 0) {
-        p._vel.x /= len;
-        p._vel.y /= len;
-        p._vel.z /= len;
+        // Normalize velocity to get pure direction
+        const len = Math.sqrt(p._vel.x * p._vel.x + p._vel.y * p._vel.y + p._vel.z * p._vel.z);
+        if (len > 0) {
+          p._vel.x /= len;
+          p._vel.y /= len;
+          p._vel.z /= len;
+        }
+
+        // Each particle has slightly different speed and life
+        p._speed = this.burstSpeed * (0.5 + Math.random() * 0.5);
+        p._life = 0;
+        p._maxLife = this.burstDuration * (0.5 + Math.random() * 0.5);
+
+        p.render.material.diffuse = new Color(0, 0.8, 0.8);
+        p.render.material.emissive = new Color(0, 0.4, 0.4);
+        p.render.material.update();
+        p.setLocalScale(0.05, 0.05, 0.05);
       }
-
-      // Each particle has slightly different speed
-      p._speed = this.burstSpeed * (0.5 + Math.random() * 0.5);
-      p._life = 0;
-      p._maxLife = this.burstDuration * (0.5 + Math.random() * 0.5);
-    }
   }
 
   update(dt) {
     super.update(dt);
 
+    // Update burst particles (runs even when projectile is dead)
+    for (let i = 0; i < this.burstParticles.length; i++) {
+      const p = this.burstParticles[i];
+      p._life = (p._life || 0) + dt;
+
+      if (p._life >= p._maxLife) {
+        p.enabled = false;
+        continue;
+      }
+
+      const lifeRatio = 1 - p._life / p._maxLife;
+
+      // Slow down over time
+      const currentSpeed = p._speed * (lifeRatio * lifeRatio);
+
+      // Move particle
+      const pos = p.getPosition();
+      const nx = pos.x + p._vel.x * currentSpeed * dt;
+      const ny = pos.y + p._vel.y * currentSpeed * dt;
+      const nz = pos.z + p._vel.z * currentSpeed * dt;
+      p.setPosition(nx, ny, nz);
+
+      // Fade and shrink
+      const alpha = lifeRatio * 0.8;
+      const scale = 0.05 * lifeRatio;
+
+      if (p.render.material) {
+        p.render.material.diffuse = new Color(0, alpha, alpha);
+        p.render.material.emissive = new Color(0, alpha * 0.4, alpha * 0.4);
+        p.render.material.update();
+      }
+      p.setLocalScale(scale, scale, scale);
+    }
+
+    // Update projectile
     if (this.projectileEntity && this.projectileEntity.enabled) {
       this.projectileTraveled += this.projectileSpeed * dt;
 
       const px = this.projectileStartPos.x + this.projectileDir.x * this.projectileTraveled;
       const py = this.projectileStartPos.y;
       const pz = this.projectileStartPos.z + this.projectileDir.z * this.projectileTraveled;
-
-      // Update burst particles
-      for (let i = 0; i < this.burstParticles.length; i++) {
-        const p = this.burstParticles[i];
-        p._life += dt;
-
-        if (p._life >= p._maxLife) {
-          p.enabled = false;
-          continue;
-        }
-
-        const lifeRatio = 1 - p._life / p._maxLife;
-
-        // Slow down over time
-        const currentSpeed = p._speed * (lifeRatio * lifeRatio);
-
-        // Move particle
-        const nx = p.getPosition().x + p._vel.x * currentSpeed * dt;
-        const ny = p.getPosition().y + p._vel.y * currentSpeed * dt;
-        const nz = p.getPosition().z + p._vel.z * currentSpeed * dt;
-        p.setPosition(nx, ny, nz);
-
-        // Fade and shrink
-        const alpha = lifeRatio * 0.8;
-        const scale = 0.05 * lifeRatio;
-
-        if (p.render.material) {
-          p.render.material.diffuse = new Color(0, alpha, alpha);
-          p.render.material.emissive = new Color(0, alpha * 0.4, alpha * 0.4);
-          p.render.material.update();
-        }
-        p.setLocalScale(scale, scale, scale);
-      }
 
       if (this.projectileTraveled >= this.maxReach) {
         this.projectileEntity.enabled = false;
