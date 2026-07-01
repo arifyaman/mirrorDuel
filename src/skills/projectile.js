@@ -11,8 +11,10 @@ export class ProjectileSkill extends Skill {
     this.maxReach = 4;
 
     this.projectileEntity = null;
-    this.trailParticles = [];
-    this.maxTrailLength = 15;
+    this.burstParticles = [];
+    this.maxBurstParticles = 20;
+    this.burstSpeed = 3;
+    this.burstDuration = 1.5;
   }
 
   _createProjectile() {
@@ -27,15 +29,15 @@ export class ProjectileSkill extends Skill {
     this.app.root.addChild(this.projectileEntity);
   }
 
-  _createTrailParticle() {
+  _createBurstParticle() {
     const material = new StandardMaterial();
     material.diffuse = new Color(0, 1, 1);
     material.emissive = new Color(0, 0.5, 0.5);
     material.update();
 
-    const particle = new Entity('trailParticle');
+    const particle = new Entity('burstParticle');
     particle.addComponent('render', { type: 'box' });
-    particle.setLocalScale(0.04, 0.04, 0.04);
+    particle.setLocalScale(0.05, 0.05, 0.05);
     particle.render.material = material;
     particle.enabled = false;
     this.app.root.addChild(particle);
@@ -68,9 +70,9 @@ export class ProjectileSkill extends Skill {
       pos.z + forward.z * 0.3
     );
 
-    // Pre-create trail particles
-    while (this.trailParticles.length < this.maxTrailLength) {
-      this.trailParticles.push(this._createTrailParticle());
+    // Pre-create burst particles
+    while (this.burstParticles.length < this.maxBurstParticles) {
+      this.burstParticles.push(this._createBurstParticle());
     }
 
     this.projectileEntity.setPosition(startPos);
@@ -79,11 +81,32 @@ export class ProjectileSkill extends Skill {
     this.projectileStartPos = new Vec3(startPos.x, startPos.y, startPos.z);
     this.projectileDir = new Vec3(forward.x, forward.y, forward.z);
     this.projectileTraveled = 0;
-    this.spawnPositions = [];
-    this.spawnIndex = 0;
 
-    for (const p of this.trailParticles) {
-      p.enabled = false;
+    // Set all particles to spawn from the same point
+    for (let i = 0; i < this.burstParticles.length; i++) {
+      const p = this.burstParticles[i];
+      p.enabled = true;
+      p.setPosition(startPos.x, startPos.y, startPos.z);
+
+      // Each particle gets unique random velocity direction
+      p._vel = {
+        x: (Math.random() - 0.5) * 2,
+        y: (Math.random() - 0.5) * 2,
+        z: (Math.random() - 0.5) * 2
+      };
+
+      // Normalize velocity to get pure direction
+      const len = Math.sqrt(p._vel.x * p._vel.x + p._vel.y * p._vel.y + p._vel.z * p._vel.z);
+      if (len > 0) {
+        p._vel.x /= len;
+        p._vel.y /= len;
+        p._vel.z /= len;
+      }
+
+      // Each particle has slightly different speed
+      p._speed = this.burstSpeed * (0.5 + Math.random() * 0.5);
+      p._life = 0;
+      p._maxLife = this.burstDuration * (0.5 + Math.random() * 0.5);
     }
   }
 
@@ -97,46 +120,30 @@ export class ProjectileSkill extends Skill {
       const py = this.projectileStartPos.y;
       const pz = this.projectileStartPos.z + this.projectileDir.z * this.projectileTraveled;
 
-      // Add new spawn position
-      if (this.spawnPositions.length < this.maxTrailLength) {
-        this.spawnPositions.push({ x: px, y: py, z: pz });
-      }
+      // Update burst particles
+      for (let i = 0; i < this.burstParticles.length; i++) {
+        const p = this.burstParticles[i];
+        p._life += dt;
 
-      // Update trail particles
-      for (let i = 0; i < this.spawnPositions.length; i++) {
-        const p = this.trailParticles[i];
-        if (!p) continue;
-        p.enabled = true;
-
-        const age = this.spawnPositions.length - i;
-        const lifeRatio = Math.max(0, 1 - age / this.maxTrailLength);
-
-        if (!p._vel) {
-          p._vel = {
-            x: (Math.random() - 0.5) * 2,
-            y: (Math.random() - 0.5) * 2,
-            z: (Math.random() - 0.5) * 2
-          };
+        if (p._life >= p._maxLife) {
+          p.enabled = false;
+          continue;
         }
 
-        if (!p._velocity) p._velocity = 1;
-        p._velocity *= 0.96;
+        const lifeRatio = 1 - p._life / p._maxLife;
 
-        const speed = lifeRatio * lifeRatio * 0.5 * p._velocity;
-        p._vel.x += (Math.random() - 0.5) * 0.1;
-        p._vel.y += (Math.random() - 0.5) * 0.1;
-        p._vel.z += (Math.random() - 0.5) * 0.1;
-        const fx = p._vel.x * speed;
-        const fy = p._vel.y * speed;
-        const fz = p._vel.z * speed;
+        // Slow down over time
+        const currentSpeed = p._speed * (lifeRatio * lifeRatio);
 
-        const nx = this.spawnPositions[i].x + fx;
-        const ny = this.spawnPositions[i].y + fy;
-        const nz = this.spawnPositions[i].z + fz;
+        // Move particle
+        const nx = p.getPosition().x + p._vel.x * currentSpeed * dt;
+        const ny = p.getPosition().y + p._vel.y * currentSpeed * dt;
+        const nz = p.getPosition().z + p._vel.z * currentSpeed * dt;
         p.setPosition(nx, ny, nz);
 
+        // Fade and shrink
         const alpha = lifeRatio * 0.8;
-        const scale = 0.04 * lifeRatio;
+        const scale = 0.05 * lifeRatio;
 
         if (p.render.material) {
           p.render.material.diffuse = new Color(0, alpha, alpha);
@@ -148,8 +155,6 @@ export class ProjectileSkill extends Skill {
 
       if (this.projectileTraveled >= this.maxReach) {
         this.projectileEntity.enabled = false;
-        for (const p of this.trailParticles) p.enabled = false;
-        this.spawnPositions = [];
         this.projectileTraveled = 0;
       } else {
         this.projectileEntity.setPosition(px, py, pz);
@@ -166,13 +171,10 @@ export class ProjectileSkill extends Skill {
     }
     this.projectileEntity = null;
 
-    for (const p of this.trailParticles) {
+    for (const p of this.burstParticles) {
       if (p.parent) p.parent.removeChild(p);
-      delete p._vel;
-      delete p._velocity;
       p.destroy();
     }
-    this.trailParticles = [];
-    this.spawnPositions = [];
+    this.burstParticles = [];
   }
 }
