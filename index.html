@@ -19,7 +19,9 @@ import {
   FILLMODE_FILL_WINDOW,
   RESOLUTION_AUTO,
   StandardMaterial,
-  Vec3
+  Vec3,
+  CameraFrame,
+  TONEMAP_ACES
 } from 'playcanvas';
 import { Player } from './src/player.js';
 
@@ -29,7 +31,7 @@ document.body.appendChild(canvas);
 
 const app = new Application(canvas, {
   graphicsDeviceOptions: {
-    antialias: true
+    antialias: false
   }
 });
 
@@ -46,7 +48,8 @@ floor.setLocalScale(10, 0.1, 10);
 floor.setPosition(0, -0.5, 0);
 
 const floorMaterial = new StandardMaterial();
-floorMaterial.diffuse = new Color(0.3, 0.3, 0.3);
+floorMaterial.diffuse = new Color(0.75, 0.75, 0.75);
+floorMaterial.receiveShadows = true;
 floorMaterial.update();
 floorRender.material = floorMaterial;
 
@@ -62,29 +65,29 @@ camera.lookAt(new Vec3(0, 0, 0));
 
 const player = new Player(app, canvas, cameraComponent);
 
-const sunLight = new Entity('sun');
-const sunComponent = sunLight.addComponent('light', {
+const directionalLight = new Entity('sun');
+directionalLight.addComponent('light', {
   type: 'directional',
-  intensity: 9
+  color: new Color(1, 0.95, 0.8),
+  intensity: 2,
+  castShadows: true,
+  shadowBias: 0.3,
+  normalOffsetBias: 0.02,
+  shadowResolution: 2048,
+  shadowDistance: 20,
+  shadowType: 'pc.SHADOW_SOFT'
 });
-app.root.addChild(sunLight);
-sunLight.setEulerAngles(40, 30, 0);
-sunLight.setPosition(-15, 40, -15);
+app.root.addChild(directionalLight);
+directionalLight.setEulerAngles(45, -30, 0);
+directionalLight.setPosition(5, 15, 5);
 
-const lightColor = new Color(1, 1, 1);
-const light = new Entity();
-light.addComponent('light', {
-    type: 'directional',
-    color: lightColor,
-    intensity: 1,
-    range: 700,
-    shadowResolution: 4096,
-    shadowDistance: 600,
-    castShadows: true,
-    shadowBias: 0.2,
-    normalOffsetBias: 0.05
-});
-app.root.addChild(light);
+// Enable TAA with CameraFrame
+const cameraFrame = new CameraFrame(app, camera.camera);
+cameraFrame.rendering.toneMapping = TONEMAP_ACES;
+cameraFrame.bloom.intensity = 0.02;
+cameraFrame.taa.enabled = true;
+cameraFrame.taa.jitter = 1;
+cameraFrame.update();
 
 app.on('update', dt => {
   player.update(dt);

@@ -19,6 +19,8 @@ export class Player {
 
     const material = new StandardMaterial();
     material.diffuse = new Color(1, 0, 0);
+    material.castShadows = true;
+    material.receiveShadows = true;
     material.update();
     this.entity.render.material = material;
     this.entity.render.material.update();
@@ -28,6 +30,8 @@ export class Player {
 
     const stripMaterial = new StandardMaterial();
     stripMaterial.diffuse = new Color(0, 1, 0);
+    stripMaterial.castShadows = true;
+    stripMaterial.receiveShadows = true;
     stripMaterial.update();
 
     this.forwardStrip = new Entity('forwardStrip');
@@ -44,6 +48,8 @@ export class Player {
     // Create projectile entity during init
     const projectileMaterial = new StandardMaterial();
     projectileMaterial.diffuse = new Color(0, 1, 1);
+    projectileMaterial.castShadows = true;
+    projectileMaterial.receiveShadows = true;
     projectileMaterial.update();
 
     this.projectileEntity = new Entity('projectile');
