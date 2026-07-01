@@ -7,12 +7,12 @@ export class ProjectileSkill extends Skill {
     this.player = player;
 
     this.maxCooldown = 0.2;
-    this.projectileSpeed = 15;
+    this.projectileSpeed = 7;
     this.maxReach = 4;
 
     this.projectileEntity = null;
     this.burstParticles = [];
-    this.maxBurstParticles = 20;
+    this.maxBurstParticles = 18;
     this.burstSpeed = 8;
     this.burstDuration = 1.5;
   }
@@ -88,16 +88,16 @@ export class ProjectileSkill extends Skill {
         p.enabled = true;
         p.setPosition(startPos.x, startPos.y, startPos.z);
 
-        // Bias velocity toward projectile direction with randomness
-        const spread = 0.2;
+     // Bias velocity toward projectile direction with randomness
+        const spread = 0.6;
         const rx = (Math.random() - 0.5) * 2;
         const ry = (Math.random() - 0.5) * 2;
         const rz = (Math.random() - 0.5) * 2;
 
         p._vel = {
-          x: this.projectileDir.x * (1 - spread) + rx * spread,
-          y: this.projectileDir.y * (1 - spread) + ry * spread,
-          z: this.projectileDir.z * (1 - spread) + rz * spread
+          x: this.projectileDir.x * 0.8 + rx * 0.4,
+          y: this.projectileDir.y * 0.85 + ry * 0.15,
+          z: this.projectileDir.z * 0.8 + rz * 0.4
         };
 
         // Normalize velocity to get pure direction
@@ -109,7 +109,7 @@ export class ProjectileSkill extends Skill {
         }
 
         // Each particle has slightly different speed and life
-        p._speed = this.burstSpeed * (0.5 + Math.random() * 0.5);
+        p._speed = this.burstSpeed * (0.2 + Math.random() * 0.85);
         p._life = 0;
         p._maxLife = this.burstDuration * (0.5 + Math.random() * 0.5);
 
