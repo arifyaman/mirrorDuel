@@ -119,6 +119,12 @@ network.onSnap((tick, players, projectiles) => {
   // Sync simulation time with server to prevent drift
   const serverTime = tick * 0.01667;
   simTime += (serverTime - simTime) * 0.1;
+  // Sync my cooldown from server
+  const myPlayer = players.find(p => p.id === 1);
+  if (myPlayer) {
+    _myCooldown = Math.max(0, myPlayer.cooldown);
+    _myCooldownMax = 0.2;
+  }
   applySnapshot(tick, players, projectiles);
 });
 
@@ -285,6 +291,10 @@ let lastTime = 0;
 app.on('update', (dt) => {
   simTime += dt;
   updateProjectiles();
+  if (_myCooldown > 0) {
+    _myCooldown = Math.max(0, _myCooldown - dt);
+  }
+  updateCooldownHUD();
   // Calculate move input from keys
   const moveX = (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
   const moveZ = (keys['w'] ? 1 : 0) - (keys['s'] ? 1 : 0);
@@ -292,6 +302,55 @@ app.on('update', (dt) => {
 
   network.update(dt, moveX, moveZ, mouseX, mouseY, flags);
 });
+
+// ---- Cooldown HUD ----
+const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
+let _myCooldown = 0;
+let _myCooldownMax = 0.2;
+
+function createCooldownHUD() {
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:80px;height:80px;pointer-events:none;z-index:100;';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 80 80');
+  svg.setAttribute('width', '80');
+  svg.setAttribute('height', '80');
+  svg.style.cssText = 'width:100%;height:100%;';
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  bg.setAttribute('cx', '40'); bg.setAttribute('cy', '40'); bg.setAttribute('r', '32');
+  bg.setAttribute('fill', 'rgba(0,0,0,0.5)'); bg.setAttribute('stroke', 'rgba(255,255,255,0.15)'); bg.setAttribute('stroke-width', '4');
+  svg.appendChild(bg);
+  const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  ring.id = 'cooldown-ring'; ring.setAttribute('cx', '40'); ring.setAttribute('cy', '40'); ring.setAttribute('r', '32');
+  ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', '#00ffff'); ring.setAttribute('stroke-width', '4');
+  ring.setAttribute('stroke-linecap', 'round'); ring.setAttribute('stroke-dasharray', COOLDOWN_CIRCUMFERENCE);
+  ring.setAttribute('stroke-dashoffset', COOLDOWN_CIRCUMFERENCE);
+  ring.setAttribute('transform', 'rotate(-90 40 40)');
+  svg.appendChild(ring);
+  const text = document.createElement('div');
+  text.id = 'cooldown-text';
+  text.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-40%);color:#fff;font-family:monospace;font-size:14px;font-weight:bold;text-align:center;line-height:1;';
+  text.textContent = '';
+  container.appendChild(svg);
+  container.appendChild(text);
+  document.body.appendChild(container);
+}
+createCooldownHUD();
+
+function updateCooldownHUD() {
+  const ring = document.getElementById('cooldown-ring');
+  const text = document.getElementById('cooldown-text');
+  if (_myCooldown <= 0) {
+    ring.setAttribute('stroke-dashoffset', 0);
+    text.textContent = 'READY';
+    text.style.color = '#00ff88';
+  } else {
+    const ratio = 1 - (_myCooldown / _myCooldownMax);
+    ring.setAttribute('stroke-dashoffset', COOLDOWN_CIRCUMFERENCE * (1 - ratio));
+    text.textContent = _myCooldown > 0.05 ? Math.ceil(_myCooldown) + 's' : '';
+    text.style.color = '#fff';
+  }
+}
 
 app.start();
 
