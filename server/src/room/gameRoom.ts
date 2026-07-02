@@ -26,13 +26,12 @@ export class GameSession {
       player.processInputs(0.01667);
     }
 
-    // Update projectiles
+   // Update projectiles (client simulates position from spawn data)
     const maxReach = this.config.skills.projectile.maxReach;
-    const speed = this.config.skills.projectile.projectileSpeed;
-    for (const proj of this.projectiles) {
-      proj.traveled += speed * 0.01667;
-    }
-    this.projectiles = this.projectiles.filter(p => p.traveled < maxReach);
+    this.projectiles = this.projectiles.filter(p => {
+      const traveled = (this._tick - p.spawnTick) * 0.01667 * p.speed;
+      return traveled < p.maxReach;
+    });
   }
 
   getSnapshot() {
@@ -52,12 +51,14 @@ export class GameSession {
 
     const projectiles = this.projectiles.map(p => ({
       id: p.id,
-      x: p.x,
+      spawnTick: p.spawnTick,
+      startX: p.startX,
       y: p.y,
-      z: p.z,
-      traveled: p.traveled,
+      startZ: p.startZ,
       dirX: p.dirX,
       dirZ: p.dirZ,
+      speed: p.speed,
+      maxReach: p.maxReach,
     }));
 
     return { tick: this._tick, players, projectiles };
@@ -67,6 +68,7 @@ export class GameSession {
     const spawnX = id === 1 ? -2 : 2;
     const player = new Player(id, name, spawnX, -0.2, 0, this.config);
     player.z = -0.2;
+    player._session = this;
     this.players.set(id, player);
     return player;
   }
@@ -85,14 +87,18 @@ export class GameSession {
     const dirX = dx / len;
     const dirZ = dz / len;
 
+    const spawnX = player.x + dirX * 0.3;
+    const spawnZ = player.z + dirZ * 0.3;
     this.projectiles.push({
       id: nextProjectileId++,
-      x: player.x + dirX * 0.3,
+      startX: spawnX,
       y: player.y,
-      z: player.z + dirZ * 0.3,
-      traveled: 0,
+      startZ: spawnZ,
       dirX,
       dirZ,
+      speed: config.projectileSpeed,
+      maxReach: config.maxReach,
+      spawnTick: this._tick,
       playerOwner: player.id,
     });
   }
@@ -111,7 +117,8 @@ export class Player {
   angle: number;
   cooldown: number;
   private readonly config: GameConfig;
-  private bufferedInputs: Array<{ moveX: number; moveZ: number; mouseX: number; mouseZ: number; flags: number }> = [];
+ private bufferedInputs: Array<{ moveX: number; moveZ: number; mouseX: number; mouseZ: number; flags: number }> = [];
+  _session: GameSession | null = null;
 
   constructor(id: number, name: string, x: number, y: number, angle: number, config: GameConfig) {
     this.id = id;
@@ -147,8 +154,8 @@ export class Player {
       const moveDirZ = -moveZ;
 
       // Player forward direction (from angle)
-      const playerForwardX = -Math.sin(this.angle);
-      const playerForwardZ = -Math.cos(this.angle);
+      const playerForwardX = Math.sin(this.angle);
+      const playerForwardZ = Math.cos(this.angle);
 
       // Normalized move direction
       const moveLen = Math.sqrt(moveDirX * moveDirX + moveDirZ * moveDirZ);
@@ -180,6 +187,11 @@ export class Player {
       this.angle = Math.atan2(mdx, mdz);
     }
 
+    // Handle projectile activation (flags & 0x01)
+    if (lastInput.flags & 0x01) {
+      this._session?.activateProjectile(this, lastInput.mouseX, lastInput.mouseZ);
+    }
+
     if (this.cooldown > 0) {
       this.cooldown -= dt;
       if (this.cooldown < 0) this.cooldown = 0;
@@ -191,11 +203,13 @@ export class Player {
 
 interface Projectile {
   id: number;
-  x: number;
+  startX: number;
   y: number;
-  z: number;
-  traveled: number;
+  startZ: number;
   dirX: number;
   dirZ: number;
+  speed: number;
+  maxReach: number;
+  spawnTick: number;
   playerOwner: number;
 }

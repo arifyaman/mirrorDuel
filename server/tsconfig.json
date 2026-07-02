@@ -12,8 +12,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "dist",
-    "rootDir": "src",
-    "baseUrl": "src"
+    "rootDir": "src"
   },
   "include": ["src/**/*.ts"]
 }

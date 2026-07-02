@@ -116,14 +116,18 @@ network.onDisconnect((reason) => {
 });
 
 network.onSnap((tick, players, projectiles) => {
-  // This is called with snapshot data from server
-  applySnapshot(players, projectiles);
+  // Sync simulation time with server to prevent drift
+  const serverTime = tick * 0.01667;
+  simTime += (serverTime - simTime) * 0.1;
+  applySnapshot(tick, players, projectiles);
 });
 
 // ---- Player entities ----
 const playerEntities = new Map();
 const playerMaterials = new Map();
 const indicatorEntities = new Map();
+const projectileEntities = new Map();
+let simTime = 0;
 
 function createPlayerEntity(id, color, indicatorColor) {
   const entity = new Entity('player' + id);
@@ -164,30 +168,76 @@ function cleanupPlayerEntities() {
   playerEntities.clear();
   indicatorEntities.clear();
   playerMaterials.clear();
+
+  for (const [id, data] of projectileEntities) {
+    if (data.entity.parent) data.entity.parent.removeChild(data.entity);
+    data.entity.destroy();
+  }
+  projectileEntities.clear();
 }
 
-function applySnapshot(players, projectiles) {
+function applySnapshot(serverTick, players, projectiles) {
   console.log('[Game] applySnapshot called:', players.length, 'players, projectiles:', projectiles.length);
   for (const p of players) {
     console.log('[Game] Processing player', p.id, 'pos:', { x: p.x, y: p.y, z: p.z });
     let entity = playerEntities.get(p.id);
     if (!entity) {
       const colors = { 1: new Color(1, 0, 0), 2: new Color(0, 0, 1) };
-      const indColors = { 1: new Color(0, 1, 0), 2: new Color(0, 0, 1) };
+      const indColors = { 1: new Color(0, 1, 0), 2: new Color(0, 1, 0) };
       createPlayerEntity(p.id, colors[p.id] || new Color(0.5, 0.5, 0.5), indColors[p.id] || new Color(0.5, 0.5, 0.5));
       entity = playerEntities.get(p.id);
       entity.enabled = false;
       console.log('[Game] Created entity for player', p.id);
     }
     entity.setPosition(p.x, p.y, p.z);
-    const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? p.angle * (180 / Math.PI) : 0;
+    const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? (p.angle + Math.PI) * (180 / Math.PI) : 0;
     entity.setEulerAngles(0, angleDeg, 0);
     entity.enabled = true;
     console.log('[Game] Set entity', p.id, 'position to:', p.x, p.y, p.z);
 
     // Update indicator visibility
     const indicator = indicatorEntities.get(p.id);
-    if (indicator) indicator.enabled = (p.id !== 1); // Only show opponent's indicator
+    if (indicator) indicator.enabled = true;
+  }
+
+  // Initialize projectile entities from server data
+  for (const proj of projectiles) {
+    let data = projectileEntities.get(proj.id);
+    if (!data) {
+      const entity = new Entity('proj' + proj.id);
+      entity.addComponent('render', { type: 'sphere' });
+      const mat = new StandardMaterial();
+      mat.diffuse = new Color(0, 1, 1);
+      entity.render.material = mat;
+      entity.setLocalScale(0.16, 0.16, 0.16);
+      app.root.addChild(entity);
+      projectileEntities.set(proj.id, { entity, spawnTime: proj.spawnTick * DT, startX: proj.startX, startY: proj.y, startZ: proj.startZ, dirX: proj.dirX, dirZ: proj.dirZ, speed: proj.speed, maxReach: proj.maxReach });
+    }
+    projectileEntities.get(proj.id).entity.enabled = true;
+  }
+
+  // Clean up destroyed projectiles
+  for (const [id, data] of projectileEntities) {
+    if (!projectiles.find(p => p.id === id)) {
+      if (data.entity.parent) data.entity.parent.removeChild(data.entity);
+      data.entity.destroy();
+      projectileEntities.delete(id);
+    }
+  }
+}
+
+// ---- Projectile simulation (runs every frame) ----
+const DT = 0.01667;
+function updateProjectiles() {
+  for (const [id, data] of projectileEntities) {
+    const elapsed = simTime - data.spawnTime;
+    if (elapsed < 0) continue;
+    const traveled = elapsed * data.speed;
+    if (traveled >= data.maxReach) continue;
+    const px = data.startX + data.dirX * elapsed * data.speed;
+    const py = data.startY;
+    const pz = data.startZ + data.dirZ * elapsed * data.speed;
+    data.entity.setPosition(px, py, pz);
   }
 }
 
@@ -233,6 +283,8 @@ canvas.addEventListener('mouseup', (e) => {
 let lastTime = 0;
 
 app.on('update', (dt) => {
+  simTime += dt;
+  updateProjectiles();
   // Calculate move input from keys
   const moveX = (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
   const moveZ = (keys['w'] ? 1 : 0) - (keys['s'] ? 1 : 0);

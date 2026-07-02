@@ -19,16 +19,15 @@ async function loadConfig() {
 }
 
 export class Player {
-  constructor(app, canvas, cameraComponent) {
+ constructor(app, canvas, cameraComponent) {
     this.app = app;
     this.canvas = canvas;
     this.cameraComponent = cameraComponent;
     this.speed = 5;
     this.lerpFactor = 8;
     this.targetPos = null;
-    this.ray = new Ray();
-    this.intersection = new Vec3();
-    this.intersectionPlayer = new Vec3();
+    this.mouseX = 0;
+    this.mouseY = 0;
     this.skills = [];
     this.skillHud = new SkillHud(this);
 
@@ -90,9 +89,6 @@ export class Player {
       }
     });
 
-    this.canvas.addEventListener('mousemove', (e) => {
-      this.raycastToPlane(e);
-    });
   }
 
   async addSkill(skill) {
@@ -123,28 +119,9 @@ export class Player {
   tryActivateSkill() {
     for (const skill of this.skills) {
       if (skill.canActivate()) {
-        skill.activate(this.projectileEntity, this.cameraComponent);
+        skill.activate();
         break;
       }
-    }
-  }
-
-  raycastToPlane(e) {
-    const camera = this.cameraComponent.camera;
-    const rect = this.canvas.getBoundingClientRect();
-    const from = new Vec3();
-    const to = new Vec3();
-    camera.screenToWorld(e.clientX - rect.left, e.clientY - rect.top, camera.nearClip, rect.width, rect.height, from);
-    camera.screenToWorld(e.clientX - rect.left, e.clientY - rect.top, camera.farClip, rect.width, rect.height, to);
-
-    this.ray.origin.copy(from);
-    this.ray.direction.sub(to, from).normalize();
-
-    const planeY = -0.5;
-    if (Math.abs(this.ray.direction.y) > 0.001) {
-      const t = (planeY - this.ray.origin.y) / this.ray.direction.y;
-      this.intersection.copy(this.ray.origin).addScaled(this.ray.direction, t);
-      this.intersectionPlayer.copy(this.intersection);
     }
   }
 
@@ -154,7 +131,8 @@ export class Player {
     }
 
     const pos = this.entity.getPosition();
-    const lookTarget = new Vec3(this.intersectionPlayer.x, pos.y, this.intersectionPlayer.z);
+    const lookTarget = new Vec3(this.mouseX, pos.y, this.mouseY);
+    this.intersection.copy(lookTarget);
 
     const cameraEntity = this.cameraComponent.camera.node;
     const cameraForward = cameraEntity.forward.clone();
@@ -174,12 +152,8 @@ export class Player {
         cameraForward.z * moveZ + cameraRight.z * moveX
       ).normalize();
 
-      const playerForward = new Vec3(lookTarget.x - pos.x, 0, lookTarget.z - pos.z).normalize();
-      const alignment = moveDir.x * playerForward.x + moveDir.z * playerForward.z;
-      const speedMultiplier = 0.75 + 0.25 * alignment;
-
-      this.targetPos.x += moveDir.x * this.speed * speedMultiplier * dt;
-      this.targetPos.z += moveDir.z * this.speed * speedMultiplier * dt;
+      this.targetPos.x += moveDir.x * this.speed * dt;
+      this.targetPos.z += moveDir.z * this.speed * dt;
     }
 
     const alpha = 1 - Math.exp(-this.lerpFactor * dt);

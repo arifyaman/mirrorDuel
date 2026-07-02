@@ -50,13 +50,15 @@ export function decodeStateSnapshot(data) {
   const projectiles = [];
   for (let i = 0; i < projCount; i++) {
     const id = dv.getUint8(off); off += 1;
-    const x = dv.getFloat32(off, true); off += 4;
+    const spawnTick = dv.getUint16(off, true); off += 2;
+    const startX = dv.getFloat32(off, true); off += 4;
     const y = dv.getFloat32(off, true); off += 4;
-    const z = dv.getFloat32(off, true); off += 4;
-    const traveled = dv.getFloat32(off, true); off += 4;
+    const startZ = dv.getFloat32(off, true); off += 4;
     const dirX = dv.getFloat32(off, true); off += 4;
     const dirZ = dv.getFloat32(off, true); off += 4;
-    projectiles.push({ id, x, y, z, traveled, dirX, dirZ });
+    const speed = dv.getFloat32(off, true); off += 4;
+    const maxReach = dv.getFloat32(off, true); off += 4;
+    projectiles.push({ id, spawnTick, startX, y, startZ, dirX, dirZ, speed, maxReach });
   }
 
   console.log(`[Protocol] Snapshot: tick=${tick}, players=${players.length}, projectiles=${projectiles.length}`);

@@ -35,7 +35,7 @@ export function encodeStateSnapshot(tick: number, players: any[], projectiles: a
   const playerCount = players.length;
   const projCount = projectiles.length;
   const SNAPSHOT_PLAYER_SIZE = 21;
-  const SNAPSHOT_PROJECTILE_SIZE = 27;
+  const SNAPSHOT_PROJECTILE_SIZE = 31;
   const size = 2 + 1 + playerCount * SNAPSHOT_PLAYER_SIZE + 1 + projCount * SNAPSHOT_PROJECTILE_SIZE;
   const buf = new Uint8Array(size);
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -57,12 +57,14 @@ export function encodeStateSnapshot(tick: number, players: any[], projectiles: a
 
   for (const p of projectiles) {
     dv.setUint8(off, p.id); off += 1;
-    dv.setFloat32(off, p.x, true); off += 4;
+    dv.setUint16(off, p.spawnTick, true); off += 2;
+    dv.setFloat32(off, p.startX, true); off += 4;
     dv.setFloat32(off, p.y, true); off += 4;
-    dv.setFloat32(off, p.z, true); off += 4;
-    dv.setFloat32(off, p.traveled, true); off += 4;
+    dv.setFloat32(off, p.startZ, true); off += 4;
     dv.setFloat32(off, p.dirX, true); off += 4;
     dv.setFloat32(off, p.dirZ, true); off += 4;
+    dv.setFloat32(off, p.speed, true); off += 4;
+    dv.setFloat32(off, p.maxReach, true); off += 4;
   }
 
   return buf;

@@ -44,20 +44,14 @@ export class ProjectileSkill extends Skill {
     return particle;
   }
 
-  activate(cameraComponent) {
+  activate() {
     super.activate();
     if (!this.projectileEntity) {
       this._createProjectile();
     }
 
     const pos = this.player.entity.getPosition();
-    let target;
-    if (this.player.intersectionPlayer && this.player.intersectionPlayer.x !== undefined) {
-      target = this.player.intersectionPlayer;
-    } else {
-      const camDir = cameraComponent.camera.node.forward;
-      target = new Vec3(camDir.x * 10, pos.y, camDir.z * 10);
-    }
+    let target = new Vec3(this.player.mouseX, pos.y, this.player.mouseY);
 
     const forward = new Vec3(
       target.x - pos.x,
