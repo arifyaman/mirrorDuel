@@ -1,0 +1,74 @@
+// Message types (must match server)
+export const MSG_JOIN_ROOM = 1;
+export const MSG_PLAYER_INPUT = 2;
+export const MSG_STATE_SNAPSHOT = 16;
+export const MSG_ROOM_CREATED = 17;
+export const MSG_DISCONNECT = 255;
+
+export const INPUT_SIZE = 13;
+
+export function encodeJoinRoom(name) {
+  const raw = new TextEncoder().encode(name);
+  const buf = new Uint8Array(1 + raw.length);
+  buf[0] = raw.length;
+  buf.set(raw, 1);
+  return buf;
+}
+
+export function encodePlayerInput(tick, moveX, moveZ, mouseX, mouseY, flags) {
+  const buf = new Uint8Array(INPUT_SIZE);
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  dv.setUint16(0, tick, true);
+  dv.setInt8(2, moveX);
+  dv.setInt8(3, moveZ);
+  dv.setFloat32(4, mouseX, true);
+  dv.setFloat32(8, mouseY, true);
+  dv.setUint8(12, flags);
+  return buf;
+}
+
+export function decodeStateSnapshot(data) {
+  if (data.length < 4) return null;
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let off = 0;
+  const tick = dv.getUint16(off, true); off += 2;
+  const playerCount = dv.getUint8(off); off += 1;
+
+  const players = [];
+  for (let i = 0; i < playerCount; i++) {
+    const id = dv.getUint8(off); off += 1;
+    const x = dv.getFloat32(off, true); off += 4;
+    const y = dv.getFloat32(off, true); off += 4;
+    const z = dv.getFloat32(off, true); off += 4;
+    const angle = dv.getFloat32(off, true); off += 4;
+    const cooldown = dv.getFloat32(off, true); off += 4;
+    console.log(`[Protocol] Player ${id}: x=${x}, y=${y}, z=${z}, angle=${angle}`);
+    players.push({ id, x, y, z, angle, cooldown });
+  }
+
+  const projCount = dv.getUint8(off); off += 1;
+  const projectiles = [];
+  for (let i = 0; i < projCount; i++) {
+    const id = dv.getUint8(off); off += 1;
+    const x = dv.getFloat32(off, true); off += 4;
+    const y = dv.getFloat32(off, true); off += 4;
+    const z = dv.getFloat32(off, true); off += 4;
+    const traveled = dv.getFloat32(off, true); off += 4;
+    const dirX = dv.getFloat32(off, true); off += 4;
+    const dirZ = dv.getFloat32(off, true); off += 4;
+    projectiles.push({ id, x, y, z, traveled, dirX, dirZ });
+  }
+
+  console.log(`[Protocol] Snapshot: tick=${tick}, players=${players.length}, projectiles=${projectiles.length}`);
+  return { tick, players, projectiles };
+}
+
+export function decodeRoomCreated(data) {
+  if (data.length < 3) return null;
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const roomId = dv.getUint16(0, true);
+  const myPlayerId = dv.getUint8(2);
+  const nameLen = dv.getUint8(3);
+  const opponentName = new TextDecoder().decode(data.slice(4, 4 + nameLen));
+  return { roomId, myPlayerId, opponentName };
+}

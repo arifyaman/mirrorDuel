@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mirror Duel</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #000; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-family: monospace;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 200;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Connecting...</div>
+    <script type="module">
+import {
+  Application,
+  Color,
+  Entity,
+  FILLMODE_FILL_WINDOW,
+  RESOLUTION_AUTO,
+  StandardMaterial,
+  Vec3,
+  CameraFrame,
+  TONEMAP_ACES
+} from 'playcanvas';
+import { NetworkClient } from './src/network/client.js';
+import { decodeStateSnapshot } from './src/network/protocol.js';
+
+const canvas = document.createElement('canvas');
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+document.body.appendChild(canvas);
+
+const app = new Application(canvas, {
+  graphicsDeviceOptions: {
+    antialias: false
+  }
+});
+
+app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
+app.setCanvasResolution(RESOLUTION_AUTO);
+
+window.addEventListener('resize', () => app.resizeCanvas());
+
+app.automaticallyManageScenes = false;
+
+const floor = new Entity('floor');
+const floorRender = floor.addComponent('render', { type: 'box' });
+floor.setLocalScale(10, 0.1, 10);
+floor.setPosition(0, -0.5, 0);
+
+const floorMaterial = new StandardMaterial();
+floorMaterial.diffuse = new Color(0.75, 0.75, 0.75);
+floorMaterial.receiveShadows = true;
+floorMaterial.update();
+floorRender.material = floorMaterial;
+
+app.root.addChild(floor);
+
+const camera = new Entity('camera');
+const cameraComponent = camera.addComponent('camera', {
+  clearColor: new Color(0.1, 0.2, 0.3)
+});
+app.root.addChild(camera);
+camera.setPosition(0, 10, 10);
+camera.lookAt(new Vec3(0, 0, 0));
+
+const directionalLight = new Entity('sun');
+directionalLight.addComponent('light', {
+  type: 'directional',
+  color: new Color(1, 0.95, 0.8),
+  intensity: 2,
+  castShadows: true,
+  shadowBias: 0.3,
+  normalOffsetBias: 0.02,
+  shadowResolution: 2048,
+  shadowDistance: 20,
+  shadowType: 'pc.SHADOW_SOFT'
+});
+app.root.addChild(directionalLight);
+directionalLight.setEulerAngles(45, -30, 0);
+directionalLight.setPosition(5, 15, 5);
+
+const cameraFrame = new CameraFrame(app, camera.camera);
+cameraFrame.rendering.toneMapping = TONEMAP_ACES;
+cameraFrame.bloom.intensity = 0.02;
+cameraFrame.taa.enabled = true;
+cameraFrame.taa.jitter = 1;
+cameraFrame.update();
+
+// ---- Network ----
+const network = new NetworkClient('ws://' + location.host + '/ws');
+
+const statusEl = document.getElementById('status');
+network.onStatus((state) => {
+  const labels = { disconnected: 'Disconnected', connecting: 'Connecting...', connected: 'Connected', reconnecting: 'Reconnecting...' };
+  statusEl.textContent = labels[state] || state;
+  statusEl.style.color = state === 'connected' ? '#0f0' : state === 'connecting' || state === 'reconnecting' ? '#ff0' : '#f00';
+});
+
+network.onDisconnect((reason) => {
+  console.log('[Network] Disconnected:', reason);
+  cleanupPlayerEntities();
+});
+
+network.onSnap((tick, players, projectiles) => {
+  // This is called with snapshot data from server
+  applySnapshot(players, projectiles);
+});
+
+// ---- Player entities ----
+const playerEntities = new Map();
+const playerMaterials = new Map();
+const indicatorEntities = new Map();
+
+function createPlayerEntity(id, color, indicatorColor) {
+  const entity = new Entity('player' + id);
+  entity.addComponent('render', { type: 'box' });
+
+  const material = new StandardMaterial();
+  material.diffuse = color;
+  material.castShadows = true;
+  material.receiveShadows = true;
+  material.update();
+  entity.render.material = material;
+  entity.setLocalScale(0.5, 0.5, 0.5);
+
+  const indicator = new Entity('indicator' + id);
+  indicator.addComponent('render', { type: 'box' });
+  const indMat = new StandardMaterial();
+  indMat.diffuse = indicatorColor;
+  indMat.castShadows = true;
+  indMat.receiveShadows = true;
+  indMat.update();
+  indicator.render.material = indMat;
+  indicator.setLocalScale(1.1, 1.1, 0.2);
+  indicator.setPosition(0, 0, -0.3);
+  indicator.enabled = false;
+
+  entity.addChild(indicator);
+  app.root.addChild(entity);
+
+  playerEntities.set(id, entity);
+  indicatorEntities.set(id, indicator);
+}
+
+function cleanupPlayerEntities() {
+  for (const [id, entity] of playerEntities) {
+    if (entity.parent) entity.parent.removeChild(entity);
+    entity.destroy();
+  }
+  playerEntities.clear();
+  indicatorEntities.clear();
+  playerMaterials.clear();
+}
+
+function applySnapshot(players, projectiles) {
+  console.log('[Game] applySnapshot called:', players.length, 'players, projectiles:', projectiles.length);
+  for (const p of players) {
+    console.log('[Game] Processing player', p.id, 'pos:', { x: p.x, y: p.y, z: p.z });
+    let entity = playerEntities.get(p.id);
+    if (!entity) {
+      const colors = { 1: new Color(1, 0, 0), 2: new Color(0, 0, 1) };
+      const indColors = { 1: new Color(0, 1, 0), 2: new Color(0, 0, 1) };
+      createPlayerEntity(p.id, colors[p.id] || new Color(0.5, 0.5, 0.5), indColors[p.id] || new Color(0.5, 0.5, 0.5));
+      entity = playerEntities.get(p.id);
+      entity.enabled = false;
+      console.log('[Game] Created entity for player', p.id);
+    }
+    entity.setPosition(p.x, p.y, p.z);
+    const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? p.angle * (180 / Math.PI) : 0;
+    entity.setEulerAngles(0, angleDeg, 0);
+    entity.enabled = true;
+    console.log('[Game] Set entity', p.id, 'position to:', p.x, p.y, p.z);
+
+    // Update indicator visibility
+    const indicator = indicatorEntities.get(p.id);
+    if (indicator) indicator.enabled = (p.id !== 1); // Only show opponent's indicator
+  }
+}
+
+// ---- Input handling ----
+const keys = {};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// Mouse tracking for aiming (world coordinates)
+let mouseX = 0, mouseY = 0, mouseDown = false;
+const ray = { origin: new Vec3(), direction: new Vec3() };
+const intersection = new Vec3();
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const cam = cameraComponent.camera;
+
+  const from = new Vec3();
+  const to = new Vec3();
+  cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top, cam.nearClip, rect.width, rect.height, from);
+  cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top, cam.farClip, rect.width, rect.height, to);
+
+  ray.origin.copy(from);
+  ray.direction.sub(to, from).normalize();
+
+  const planeY = -0.5;
+  if (Math.abs(ray.direction.y) > 0.001) {
+    const t = (planeY - ray.origin.y) / ray.direction.y;
+    intersection.copy(ray.origin).addScaled(ray.direction, t);
+    mouseX = intersection.x;
+    mouseY = intersection.z;
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button === 0) mouseDown = true;
+});
+canvas.addEventListener('mouseup', (e) => {
+  if (e.button === 0) mouseDown = false;
+});
+
+// ---- Game loop ----
+let lastTime = 0;
+
+app.on('update', (dt) => {
+  // Calculate move input from keys
+  const moveX = (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
+  const moveZ = (keys['w'] ? 1 : 0) - (keys['s'] ? 1 : 0);
+  const flags = mouseDown ? 0x01 : 0;
+
+  network.update(dt, moveX, moveZ, mouseX, mouseY, flags);
+});
+
+app.start();
+
+// Start network connection
+network.connect();
+
+    </script>
+</body>
+</html>
