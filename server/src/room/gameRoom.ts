@@ -18,15 +18,27 @@ export class GameSession {
     return this._tick;
   }
 
-  tickStep() {
+ tickStep() {
     this._tick++;
 
     // Process buffered inputs for all players
+    const firedPlayers: Set<number> = new Set();
     for (const player of this.players.values()) {
       player.processInputs(0.01667);
+      if (player._justFired) firedPlayers.add(player.id);
+      player._justFired = false;
     }
 
-   // Update projectiles (client simulates position from spawn data)
+    // Mirror cooldown reduction: when any player fires, reduce all OTHER players' cooldowns by 50%
+    for (const firedId of firedPlayers) {
+      for (const player of this.players.values()) {
+        if (player.id !== firedId && player.cooldown > 0) {
+          player.cooldown *= 0.5;
+        }
+      }
+    }
+
+    // Update projectiles (client simulates position from spawn data)
     const maxReach = this.config.skills.projectile.maxReach;
     this.projectiles = this.projectiles.filter(p => {
       const traveled = (this._tick - p.spawnTick) * 0.01667 * p.speed;
@@ -87,6 +99,8 @@ export class GameSession {
     const dirX = dx / len;
     const dirZ = dz / len;
 
+   player._justFired = true;
+
     const spawnX = player.x + dirX * 0.3;
     const spawnZ = player.z + dirZ * 0.3;
     this.projectiles.push({
@@ -115,9 +129,10 @@ export class Player {
   targetX: number;
   targetZ: number;
   angle: number;
-  cooldown: number;
+ cooldown: number;
+  _justFired: boolean = false;
   private readonly config: GameConfig;
- private bufferedInputs: Array<{ moveX: number; moveZ: number; mouseX: number; mouseZ: number; flags: number }> = [];
+  private bufferedInputs: Array<{ moveX: number; moveZ: number; mouseX: number; mouseZ: number; flags: number }> = [];
   _session: GameSession | null = null;
 
   constructor(id: number, name: string, x: number, y: number, angle: number, config: GameConfig) {
