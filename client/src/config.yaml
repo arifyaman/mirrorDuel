@@ -1,6 +1,6 @@
 skills:
   projectile:
-    cooldown: .2
+    cooldown: 4
     projectileSpeed: 7.5
     maxReach: 4
     maxBurstParticles: 18
