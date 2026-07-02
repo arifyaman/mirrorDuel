@@ -7,7 +7,7 @@ export class ProjectileSkill extends Skill {
     this.player = player;
 
     this.maxCooldown = 0.2;
-    this.projectileSpeed = 7;
+    this.projectileSpeed = 7.5;
     this.maxReach = 4;
 
     this.projectileEntity = null;
@@ -23,7 +23,7 @@ export class ProjectileSkill extends Skill {
     material.update();
 
     this.projectileEntity = new Entity('projectile');
-    this.projectileEntity.addComponent('render', { type: 'box' });
+    this.projectileEntity.addComponent('render', { type: 'sphere' });
     this.projectileEntity.setLocalScale(0.16, 0.16, 0.16);
     this.projectileEntity.render.material = material;
     this.app.root.addChild(this.projectileEntity);

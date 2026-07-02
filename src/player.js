@@ -1,5 +1,22 @@
 import { Entity, Color, StandardMaterial, Vec3, Ray } from 'playcanvas';
 import { ProjectileSkill } from './skills/projectile.js';
+import { parseYaml } from './config.js';
+import { SkillHud } from './ui/skillHud.js';
+
+let cachedConfig = null;
+
+async function loadConfig() {
+  if (cachedConfig) return cachedConfig;
+  try {
+    const res = await fetch('src/config.yaml');
+    const text = await res.text();
+    cachedConfig = parseYaml(text);
+  } catch (e) {
+    console.warn('Failed to load config.yaml:', e);
+    cachedConfig = {};
+  }
+  return cachedConfig;
+}
 
 export class Player {
   constructor(app, canvas, cameraComponent) {
@@ -13,6 +30,7 @@ export class Player {
     this.intersection = new Vec3();
     this.intersectionPlayer = new Vec3();
     this.skills = [];
+    this.skillHud = new SkillHud(this);
 
     this.entity = new Entity('player');
     this.entity.addComponent('render', { type: 'box' });
@@ -77,8 +95,21 @@ export class Player {
     });
   }
 
-  addSkill(skill) {
+  async addSkill(skill) {
     this.skills.push(skill);
+    if (skill instanceof ProjectileSkill) {
+      const config = await loadConfig();
+      const proj = config.skills?.projectile;
+      if (proj) {
+        skill.maxCooldown = proj.cooldown ?? skill.maxCooldown;
+        skill.projectileSpeed = proj.projectileSpeed ?? skill.projectileSpeed;
+        skill.maxReach = proj.maxReach ?? skill.maxReach;
+        skill.maxBurstParticles = proj.maxBurstParticles ?? skill.maxBurstParticles;
+        skill.burstSpeed = proj.burstSpeed ?? skill.burstSpeed;
+        skill.burstDuration = proj.burstDuration ?? skill.burstDuration;
+      }
+    }
+    this.skillHud.init();
   }
 
   removeSkill(skill) {
@@ -161,5 +192,7 @@ export class Player {
     for (const skill of this.skills) {
       skill.update(dt);
     }
+
+    this.skillHud.update(dt);
   }
 }
