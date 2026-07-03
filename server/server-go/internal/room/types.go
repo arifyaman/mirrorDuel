@@ -36,6 +36,8 @@ type Player struct {
 	Cooldown float32
 
 	JustFired      bool
+	AimX           float32
+	AimZ           float32
 	BufferedInputs []network.PlayerInput
 	GameSession    *GameSession
 	Session        SessionIface
@@ -126,6 +128,10 @@ func (p *Player) ProcessInputs(dt float32) {
 	if dist > 0.01 {
 		p.Angle = float32(math.Atan2(float64(mdx), float64(mdz)))
 	}
+
+	// Store aim position for projectile spawning
+	p.AimX = last.MouseX
+	p.AimZ = last.MouseY
 
 	// Cooldown decay
 	if p.Cooldown > 0 {

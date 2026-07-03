@@ -66,12 +66,9 @@ func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 	roomCreated := network.EncodeRoomCreated(result.RoomID, uint8(result.PlayerID), result.OpponentName)
 	session.SendRoomCreated(roomCreated)
 
-	// Also send current snapshot to both players
+	// Also send current snapshot to both players in the room
 	for _, room := range m.Rooms {
-		if player, ok := room.Players[result.PlayerID]; ok {
-			if player.Session == nil {
-				continue
-			}
+		if room.RoomID == int(result.RoomID) {
 			tick, players, projectiles := room.GetSnapshot()
 			data := network.EncodeStateSnapshot(tick, players, projectiles)
 			for _, p := range room.Players {

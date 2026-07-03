@@ -56,6 +56,38 @@ func (s *GameSession) TickStep() {
 		}
 	}
 
+	// Fire projectiles for players that fired this tick (must be inside lock so projectiles
+	// are captured in the snapshot below)
+	for _, player := range firedPlayers {
+		if player.Cooldown > 0 {
+			continue
+		}
+		cfg := s.Config.Projectile
+		player.Cooldown = cfg.Cooldown
+
+		dx := player.AimX - player.X
+		dz := player.AimZ - player.Z
+		if dx*dx+dz*dz >= 0.0001 {
+			length := float32(math.Sqrt(float64(dx*dx + dz*dz)))
+			dirX := dx / length
+			dirZ := dz / length
+			spawnX := player.X + dirX*0.3
+			spawnZ := player.Z + dirZ*0.3
+			s.Projectiles = append(s.Projectiles, Projectile{
+				ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
+				StartX:      spawnX,
+				Y:           player.Y,
+				StartZ:      spawnZ,
+				DirX:        dirX,
+				DirZ:        dirZ,
+				Speed:       cfg.Speed,
+				MaxReach:    cfg.MaxReach,
+				SpawnTick:   s.tick,
+				PlayerOwner: player.ID,
+			})
+		}
+	}
+
 	// Update projectiles (client simulates position from spawn data)
 	maxReach := s.Config.Projectile.MaxReach
 	alive := make([]Projectile, 0, len(s.Projectiles))
@@ -67,49 +99,7 @@ func (s *GameSession) TickStep() {
 	}
 	s.Projectiles = alive
 
-	// Get snapshot data while holding lock
-	snapshotTick := uint16(s.tick)
-	snapshotPlayers := make([]network.PlayerSnapshot, 0, len(s.Players))
-	for _, p := range s.Players {
-		snapshotPlayers = append(snapshotPlayers, network.PlayerSnapshot{
-			ID:       uint8(p.ID),
-			X:        p.X,
-			Y:        p.Y,
-			Z:        p.Z,
-			Angle:    p.Angle,
-			Cooldown: p.Cooldown,
-		})
-	}
-	snapshotProjectiles := make([]network.ProjectileSnapshot, 0, len(s.Projectiles))
-	for _, p := range s.Projectiles {
-		snapshotProjectiles = append(snapshotProjectiles, network.ProjectileSnapshot{
-			ID:        uint8(p.ID),
-			SpawnTick: uint16(p.SpawnTick),
-			StartX:    p.StartX,
-			Y:         p.Y,
-			StartZ:    p.StartZ,
-			DirX:      p.DirX,
-			DirZ:      p.DirZ,
-			Speed:     p.Speed,
-			MaxReach:  p.MaxReach,
-		})
-	}
 	s.mu.Unlock()
-
-	// Spawn projectiles for fired players (outside lock)
-	for _, player := range firedPlayers {
-		s.ActivateProjectile(player, player.X, player.Z)
-	}
-
-	// Broadcast (outside lock)
-	if len(snapshotPlayers) > 0 {
-		data := network.EncodeStateSnapshot(snapshotTick, snapshotPlayers, snapshotProjectiles)
-		for _, p := range s.Players {
-			if p.Session != nil {
-				p.Session.SendSnapshot(data)
-			}
-		}
-	}
 }
 
 // GetSnapshot returns player and projectile data for encoding.
@@ -169,44 +159,4 @@ func (s *GameSession) AddPlayer(id int, name string, session SessionIface) *Play
 	player.Session = session
 	s.Players[id] = player
 	return player
-}
-
-// ActivateProjectile spawns a projectile if the player's cooldown allows.
-func (s *GameSession) ActivateProjectile(p *Player, mouseX, mouseY float32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if p.Cooldown > 0 {
-		return
-	}
-
-	cfg := s.Config.Projectile
-	p.Cooldown = cfg.Cooldown
-
-	dx := mouseX - p.X
-	dz := mouseY - p.Z
-	len2 := dx*dx + dz*dz
-	if len2 < 0.0001 {
-		return
-	}
-	length := float32(math.Sqrt(float64(len2)))
-	dirX := dx / length
-	dirZ := dz / length
-
-	p.JustFired = true
-
-	spawnX := p.X + dirX*0.3
-	spawnZ := p.Z + dirZ*0.3
-	s.Projectiles = append(s.Projectiles, Projectile{
-		ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
-		StartX:      spawnX,
-		Y:           p.Y,
-		StartZ:      spawnZ,
-		DirX:        dirX,
-		DirZ:        dirZ,
-		Speed:       cfg.Speed,
-		MaxReach:    cfg.MaxReach,
-		SpawnTick:   s.tick,
-		PlayerOwner: p.ID,
-	})
 }
