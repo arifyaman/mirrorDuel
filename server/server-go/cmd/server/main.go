@@ -1,10 +1,11 @@
 package main
 
 import (
-	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,13 +15,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
 	"mirror-duel-server-go/internal/config"
-	"mirror-duel-server-go/internal/room"
 	"mirror-duel-server-go/internal/network"
+	"mirror-duel-server-go/internal/room"
 )
 
-// sessionRegistry tracks all active QUIC sessions.
+// sessionRegistry tracks active sessions for cleanup.
 type sessionRegistry struct {
 	mu       sync.RWMutex
 	sessions map[string]*network.Session
@@ -48,113 +50,89 @@ func (r *sessionRegistry) Count() int {
 	return len(r.sessions)
 }
 
-// quicSession is a wrapper around a raw QUIC connection.
-type quicSession struct {
-	id        string
-	conn      *quic.Conn
-	stream    *quic.Stream
-	connected bool
-	rm        *room.RoomManager
-	reg       *sessionRegistry
-}
-
-func newQUICSession(id string, conn *quic.Conn, stream *quic.Stream, rm *room.RoomManager, reg *sessionRegistry) *quicSession {
-	s := &quicSession{
-		id:        id,
-		conn:      conn,
-		stream:    stream,
-		connected: true,
-		rm:        rm,
-		reg:       reg,
-	}
-	go s.readLoop()
-	return s
-}
-
-func (s *quicSession) ID() string {
-	return s.id
-}
-
-func (s *quicSession) PlayerID() int {
-	// We need to track this separately
-	return 0
-}
-
-func (s *quicSession) IsConnected() bool {
-	return s.connected
-}
-
-func (s *quicSession) SendRoomCreated(data []byte) {
-	if !s.connected {
-		return
-	}
-	s.sendMsg(network.MSGRoomCreated, data)
-}
-
-func (s *quicSession) SendSnapshot(data []byte) {
-	if !s.connected {
-		return
-	}
-	s.sendMsg(network.MSGStateSnapshot, data)
-}
-
-func (s *quicSession) SendDisconnect() {
-	s.sendMsg(network.MSGDisconnect, nil)
-	s.connected = false
-}
-
-func (s *quicSession) sendMsg(msgType uint8, data []byte) {
-	if !s.connected {
-		return
-	}
-	full := make([]byte, 1+len(data))
-	full[0] = msgType
-	copy(full[1:], data)
-	_, err := s.stream.Write(full)
+func getCertSHA256(certFile string) string {
+	data, err := os.ReadFile(certFile)
 	if err != nil {
-		fmt.Printf("[QUIC] Write error for %s: %v\n", s.id, err)
-		s.connected = false
+		return ""
 	}
-}
-
-func (s *quicSession) readLoop() {
-	buf := make([]byte, 256)
-	for s.connected {
-		n, err := s.stream.Read(buf)
-		if err != nil {
-			fmt.Printf("[QUIC] %s stream read error: %v\n", s.id, err)
-			s.connected = false
-			return
-		}
-		if n == 0 {
-			continue
-		}
-		// Parse message
-		msg := network.ParseMessage(buf[:n])
-		if msg == nil {
-			continue
-		}
-		fmt.Printf("[QUIC] %s received msg type=%d payloadLen=%d\n", s.id, msg.Type, len(msg.Payload))
-		// Dispatch to room manager
-		s.rm.HandleMessage(s, msg)
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return ""
 	}
-}
-
-func (s *quicSession) close() {
-	s.rm.HandleDisconnect(s)
-	s.reg.Remove(s.id)
+	hash := sha256.Sum256(block.Bytes)
+	return hex.EncodeToString(hash[:])
 }
 
 var sessionCounter int64
 
+// wtHandler serves HTTP requests and WebTransport upgrades.
+type wtHandler struct {
+	rm       *room.RoomManager
+	reg      *sessionRegistry
+	wtServer *webtransport.Server
+	certHash string
+}
+
+func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status":"ok","version":"0.3.0","players":%d}`, h.rm.PlayerCount())
+		return
+	}
+	if r.URL.Path == "/cert-hash" {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"hash":"%s"}`, h.certHash)
+		return
+	}
+
+	// WebTransport upgrade
+	if r.URL.Path == "/wt" {
+		conn, err := h.wtServer.Upgrade(w, r)
+		if err != nil {
+			fmt.Printf("[WT] Upgrade error: %v\n", err)
+			return
+		}
+		stream, err := conn.AcceptStream(r.Context())
+		if err != nil {
+			fmt.Printf("[WT] Stream accept error: %v\n", err)
+			return
+		}
+
+		id := fmt.Sprintf("s%d", atomic.AddInt64(&sessionCounter, 1))
+		sess := network.NewSession(id, conn, stream)
+		sess.SetMessageHandler(func(msg *network.SessionMessage) {
+			h.rm.HandleMessage(sess, msg)
+		})
+		h.reg.Add(id, sess)
+
+		fmt.Printf("[WT] %s connected (total: %d)\n", id, h.reg.Count())
+		if h.rm.Callbacks.OnSessionCreated != nil {
+			h.rm.Callbacks.OnSessionCreated(sess)
+		}
+
+		// Wait for session to close
+		<-conn.Context().Done()
+		sess.SendDisconnect()
+		h.reg.Remove(id)
+		h.rm.HandleDisconnect(sess)
+
+		if h.rm.Callbacks.OnSessionDisconnect != nil {
+			h.rm.Callbacks.OnSessionDisconnect(sess)
+		}
+		fmt.Printf("[WT] %s disconnected\n", id)
+		return
+	}
+
+	http.NotFound(w, r)
+}
+
 func main() {
 	cfg := config.Default()
 
-	// Load TLS cert for QUIC (required)
 	certFile := "tls/cert.pem"
 	keyFile := "tls/key.pem"
 
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	_, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		fmt.Printf("[TLS] Failed to load cert: %v. Generating self-signed...\n", err)
 		cmd := exec.Command("go", "run", "tls/gen_cert.go")
@@ -164,72 +142,45 @@ func main() {
 		if err := cmd.Run(); err != nil {
 			panic(fmt.Sprintf("[TLS] Failed to generate cert: %v", err))
 		}
-		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
+		_, err = tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	// --- Create Room Manager ---
+	certHash := getCertSHA256(certFile)
+	if certHash == "" {
+		panic("Failed to read cert for hash")
+	}
+	fmt.Printf("[TLS] Certificate SHA-256: %s\n", certHash)
+
+	// --- Room Manager ---
 	rm := room.NewRoomManager(cfg)
 	sessionReg := newSessionRegistry()
 
-	rm.Callbacks = room.RoomCallbacks{
-		OnSessionCreated: func(s room.SessionIface) {
-			fmt.Printf("[Game] Session %s created\n", s.ID())
+	// --- WebTransport + HTTP/3 server ---
+	// Create webtransport server and set its handler to our custom handler
+	var wtServer *webtransport.Server
+	wtServer = &webtransport.Server{
+		H3: http3.Server{
+			Addr: fmt.Sprintf(":%d", cfg.QUICPort),
 		},
-		OnSessionDisconnect: func(s room.SessionIface) {
-			fmt.Printf("[Game] Session %s disconnected\n", s.ID())
+		CheckOrigin: func(r *http.Request) bool {
+			return true
 		},
 	}
-
-	// --- QUIC listener ---
-	quicAddr := fmt.Sprintf(":%d", cfg.QUICPort)
-
-	udpConn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: cfg.QUICPort})
-	if err != nil {
-		panic(err)
+	handler := &wtHandler{
+		rm:       rm,
+		reg:      sessionReg,
+		wtServer: wtServer,
+		certHash: certHash,
 	}
+	wtServer.H3.Handler = handler
 
-	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		NextProtos:   []string{"mirror-duel/1"},
-	}
-
-	quicLn, err := quic.Listen(udpConn, tlsConf, nil)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("[Server] QUIC listening on %s\n", quicAddr)
-
-	// Accept QUIC connections
-	quicCtx, quicCancel := context.WithCancel(context.Background())
-	defer quicCancel()
+	fmt.Printf("[Server] WebTransport listening on QUIC :%d\n", cfg.QUICPort)
 	go func() {
-		for {
-			conn, err := quicLn.Accept(quicCtx)
-			if err != nil {
-				// Expected during shutdown
-				return
-			}
-			// Wait for handshake
-			<-conn.HandshakeComplete()
-
-			// Accept the first bidirectional stream from the client
-			stream, err := conn.AcceptStream(quicCtx)
-			if err != nil {
-				continue
-			}
-
-			id := fmt.Sprintf("s%d", atomic.AddInt64(&sessionCounter, 1))
-			quicSess := newQUICSession(id, conn, stream, rm, sessionReg)
-
-			// Wait for session to close
-			for quicSess.connected {
-				time.Sleep(100 * time.Millisecond)
-			}
-
-			quicSess.close()
+		if err := wtServer.ListenAndServeTLS(certFile, keyFile); err != nil {
+			fmt.Printf("[WT] Error: %v\n", err)
 		}
 	}()
 
@@ -241,16 +192,42 @@ func main() {
 		}
 	}()
 
-	// --- HTTP health check ---
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","version":"0.2.0","players":%d}`, rm.PlayerCount())
-	})
+	// --- HTTP endpoints (TCP) ---
 	httpPort := cfg.HTTPPort
 	addr := fmt.Sprintf(":%d", httpPort)
 	fmt.Printf("[Server] HTTP health check on %s\n", addr)
+
+	// Read cert PEM for /cert-pem endpoint
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		fmt.Printf("[HTTP] Warning: could not read cert for /cert-pem: %v\n", err)
+	}
+
 	go func() {
-		if err := http.ListenAndServe(addr, nil); err != nil {
+		mux := http.NewServeMux()
+		cors := func(h http.HandlerFunc) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+				if r.Method == "OPTIONS" {
+					w.WriteHeader(204)
+					return
+				}
+				h(w, r)
+			}
+		}
+		mux.HandleFunc("/health", cors(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"status":"ok","version":"0.3.0","players":%d}`, rm.PlayerCount())
+		}))
+		if len(certPEM) > 0 {
+			mux.HandleFunc("/cert-pem", cors(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/x-pem-file")
+				w.Write(certPEM)
+			}))
+		}
+		if err := http.ListenAndServe(addr, mux); err != nil {
 			fmt.Printf("[HTTP] Error: %v\n", err)
 		}
 	}()
@@ -260,9 +237,8 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	fmt.Println("\n[Server] Shutting down...")
-
-	quicLn.Close()
 	rm.Cleanup()
 	ticker.Stop()
+	wtServer.Close()
 	println("[Server] Shutdown complete")
 }

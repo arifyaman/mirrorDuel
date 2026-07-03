@@ -20,10 +20,56 @@
             z-index: 200;
             text-align: center;
         }
+        #cert-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 300;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        #dropZone {
+            border: 2px dashed #555;
+            border-radius: 8px;
+            padding: 12px 24px;
+            cursor: pointer;
+            background: rgba(0,0,0,0.7);
+            color: #aaa;
+            font-family: monospace;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        #dropZone:hover { border-color: #7dd3fc; color: #7dd3fc; }
+        #dropZone.has-file { border-color: #86efac; color: #86efac; }
+        #nick-row { display: flex; gap: 8px; align-items: center; }
+        #nickInput {
+            padding: 6px 12px; background: rgba(0,0,0,0.7);
+            border: 1px solid #555; color: #fff;
+            border-radius: 4px; font-family: monospace;
+            font-size: 14px; width: 160px;
+        }
+        #btnJoin {
+            padding: 6px 20px; background: #2563eb; color: white;
+            border: none; border-radius: 4px; font-family: monospace;
+            font-size: 14px; cursor: pointer;
+        }
+        #btnJoin:disabled { background: #444; cursor: default; }
     </style>
 </head>
 <body>
-    <div id="status">Connecting...</div>
+    <div id="status">Disconnected</div>
+    <div id="cert-panel">
+        <div id="dropZone">Drop cert.pem here</div>
+        <input id="fileInput" type="file" accept=".pem" hidden />
+        <div id="nick-row">
+            <input id="nickInput" placeholder="Nickname" />
+            <button id="btnJoin">Join</button>
+        </div>
+    </div>
     <script type="module">
 import {
   Application,
@@ -36,7 +82,7 @@ import {
   CameraFrame,
   TONEMAP_ACES
 } from 'playcanvas';
-import { NetworkClient } from './src/network/client.js';
+import { NetworkClient } from './src/network/webtransport.js';
 import { decodeStateSnapshot } from './src/network/protocol.js';
 
 const canvas = document.createElement('canvas');
@@ -101,13 +147,64 @@ cameraFrame.taa.jitter = 1;
 cameraFrame.update();
 
 // ---- Network ----
-const network = new NetworkClient('ws://' + location.host + '/ws');
+const network = new NetworkClient('localhost:4433');
+network.init();
+
+// ---- Cert Drop Zone ----
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const nickInput = document.getElementById('nickInput');
+const btnJoin = document.getElementById('btnJoin');
+let certLoaded = false;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#7dd3fc'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; });
+dropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '';
+    if (e.dataTransfer.files[0]) {
+        const pem = await e.dataTransfer.files[0].text();
+        const spki = network.extractSpki(pem);
+        if (spki) {
+            network.spkiHashBuffer = await crypto.subtle.digest('SHA-256', spki);
+            certLoaded = true;
+            dropZone.classList.add('has-file');
+            dropZone.textContent = '✓ cert.pem loaded';
+            btnJoin.disabled = false;
+        }
+    }
+});
+fileInput.addEventListener('change', async (e) => {
+    if (e.target.files[0]) {
+        const pem = await e.target.files[0].text();
+        const spki = network.extractSpki(pem);
+        if (spki) {
+            network.spkiHashBuffer = await crypto.subtle.digest('SHA-256', spki);
+            certLoaded = true;
+            dropZone.classList.add('has-file');
+            dropZone.textContent = '✓ cert.pem loaded';
+            btnJoin.disabled = false;
+        }
+    }
+});
+btnJoin.addEventListener('click', () => {
+    const nick = nickInput.value.trim() || 'Player' + Math.floor(Math.random() * 1000);
+    network.connect(nick);
+    document.getElementById('cert-panel').style.display = 'none';
+});
+nickInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') btnJoin.click();
+});
 
 const statusEl = document.getElementById('status');
 network.onStatus((state) => {
   const labels = { disconnected: 'Disconnected', connecting: 'Connecting...', connected: 'Connected', reconnecting: 'Reconnecting...' };
   statusEl.textContent = labels[state] || state;
   statusEl.style.color = state === 'connected' ? '#0f0' : state === 'connecting' || state === 'reconnecting' ? '#ff0' : '#f00';
+  if (state === 'connected') {
+    document.getElementById('cert-panel').style.display = 'none';
+  }
 });
 
 network.onDisconnect((reason) => {
@@ -115,6 +212,8 @@ network.onDisconnect((reason) => {
   cleanupPlayerEntities();
   if (document.getElementById('cooldown-container')) document.getElementById('cooldown-container').remove();
   createCooldownHUD();
+  document.getElementById('cert-panel').style.display = 'flex';
+  btnJoin.disabled = !network.certHashBuffer;
 });
 
 network.onJoin((roomId, myPlayerId) => {

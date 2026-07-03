@@ -1,10 +1,7 @@
 package room
 
 import (
-	"fmt"
 	"math"
-
-	"github.com/quic-go/webtransport-go"
 
 	"mirror-duel-server-go/internal/config"
 	"mirror-duel-server-go/internal/network"
@@ -43,36 +40,6 @@ type Player struct {
 	GameSession    *GameSession
 	Session        SessionIface
 	Config         *config.Config
-}
-
-// Session is a reference to the network layer session for this player.
-type Session struct {
-	id        string
-	playerID  int
-	conn      *webtransport.Session
-	stream    *webtransport.Stream
-	connected bool
-	onMessage func(msg *network.SessionMessage)
-}
-
-// ID returns the session identifier.
-func (s *Session) ID() string {
-	return s.id
-}
-
-// PlayerID returns the player ID (0 if not assigned).
-func (s *Session) PlayerID() int {
-	return s.playerID
-}
-
-// IsConnected returns whether the session is still connected.
-func (s *Session) IsConnected() bool {
-	return s.connected
-}
-
-// SetPlayerID assigns the player ID to this session.
-func (s *Session) SetPlayerID(id int) {
-	s.playerID = id
 }
 
 // NewPlayer creates a new Player.
@@ -179,43 +146,4 @@ func (p *Player) ProcessInputs(dt float32) {
 	p.BufferedInputs = nil
 }
 
-// ---- Session network sending methods ----
 
-// SendRoomCreated sends a ROOM_CREATED message over the QUIC stream.
-func (s *Session) SendRoomCreated(data []byte) {
-	if !s.connected {
-		return
-	}
-	s.sendMsg(network.MSGRoomCreated, data)
-}
-
-// SendSnapshot sends a STATE_SNAPSHOT message over the QUIC stream.
-func (s *Session) SendSnapshot(data []byte) {
-	if !s.connected {
-		return
-	}
-	s.sendMsg(network.MSGStateSnapshot, data)
-}
-
-// SendDisconnect sends a DISCONNECT message over the QUIC stream.
-func (s *Session) SendDisconnect() {
-	s.sendMsg(network.MSGDisconnect, nil)
-	s.connected = false
-}
-
-// sendMsg prepends a message type byte and writes to the QUIC stream.
-func (s *Session) sendMsg(msgType uint8, data []byte) {
-	if !s.connected {
-		return
-	}
-
-	full := make([]byte, 1+len(data))
-	full[0] = msgType
-	copy(full[1:], data)
-
-	_, err := s.stream.Write(full)
-	if err != nil {
-		fmt.Printf("[Session] Write error for %s: %v\n", s.id, err)
-		s.connected = false
-	}
-}
