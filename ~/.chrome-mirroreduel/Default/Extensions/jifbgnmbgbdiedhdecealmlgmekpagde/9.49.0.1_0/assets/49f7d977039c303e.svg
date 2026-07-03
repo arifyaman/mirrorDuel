@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="154" height="29" viewBox="0 0 154 29" fill="none">
+    <style>
+        .purple { fill: #BAA4E0; }
+        .blue { fill: #A4C3E0; }
+        .white { fill: #FFFFFF; }
+        .purple-g { filter: url(#blur24); }
+        .blue-g { filter: url(#blur37); }
+        .white-g { filter: url(#blur24); }
+        @media (prefers-color-scheme: dark) {
+            .purple { fill: #7449C0; }
+            .blue { fill: #2780D2; }
+            .white { display: none; }
+            .blue-g { filter: url(#blur24); }
+        }
+    </style>
+    <!-- Light: left:6 top:-38 / Dark: left:15 top:6 — using light positions, dark adjusts via media -->
+    <g class="purple-g">
+        <rect class="purple" x="6" y="-38" width="67.67" height="73.28" rx="33.84"/>
+    </g>
+    <g class="blue-g">
+        <rect class="blue" x="64" y="-48" width="128" height="73" rx="36.5"/>
+    </g>
+    <g class="white-g">
+        <rect class="white" x="34" y="-14" width="43" height="73" rx="21.5"/>
+    </g>
+    <defs>
+        <filter id="blur24" x="-100%" y="-100%" width="300%" height="300%" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+            <feGaussianBlur stdDeviation="24"/>
+        </filter>
+        <filter id="blur37" x="-100%" y="-100%" width="300%" height="300%" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+            <feGaussianBlur stdDeviation="37.5"/>
+        </filter>
+    </defs>
+</svg>

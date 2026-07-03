@@ -37,7 +37,6 @@ export class NetworkClient {
       const spki = this.extractSpki(pem);
       if (spki) {
         this.spkiHashBuffer = await crypto.subtle.digest('SHA-256', spki);
-        console.log('[WT] SPKI hash computed from server cert');
       }
     } catch (e) {
       console.warn('[WT] Could not init cert:', e.message);
@@ -96,7 +95,6 @@ export class NetworkClient {
 
       return der.subarray(spkiStart, spkiEnd);
     } catch (e) {
-      console.warn('[WT] Could not extract SPKI:', e);
       return null;
     }
   }
@@ -153,7 +151,6 @@ export class NetworkClient {
     try {
       this.wt = new WebTransport(`https://${host}/wt`, opts);
       await this.wt.ready;
-      console.log('[WT] Connected');
 
       this.stream = await this.wt.createBidirectionalStream();
       this.reader = this.stream.readable.getReader();
@@ -161,7 +158,6 @@ export class NetworkClient {
 
       this.readLoop();
       await this.sendJoin(nickname);
-      console.log('[WT] Join sent');
       this.setStatus('connected');
     } catch (err) {
       console.error('[WT] Connection error:', err.message);
@@ -215,7 +211,6 @@ export class NetworkClient {
     if (this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
-      console.log('[WT] Reconnecting...');
       await this.connect();
     }, 2000);
   }
@@ -226,9 +221,7 @@ export class NetworkClient {
     const msg = new Uint8Array(1 + data.length);
     msg[0] = MSG_JOIN_ROOM;
     msg.set(data, 1);
-    console.log('[WT] Sending JOIN_ROOM:', msg);
     await this.writer.write(msg);
-    console.log('[WT] JOIN_ROOM sent');
   }
 
   handleSnapshot(payload) {

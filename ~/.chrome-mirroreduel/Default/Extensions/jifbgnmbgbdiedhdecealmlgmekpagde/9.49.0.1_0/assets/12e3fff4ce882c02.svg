@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="160" viewBox="0 0 120 160" fill="none">
+  <g opacity="0.3">
+    <!-- Mountain/landscape icon representing a missing image -->
+    <rect x="34" y="58" width="52" height="44" rx="4" stroke="#8E8E93" stroke-width="2" fill="none"/>
+    <!-- Mountains -->
+    <path d="M38 94l14-20 10 12 8-10 12 18" stroke="#8E8E93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- Sun -->
+    <circle cx="72" cy="72" r="5" stroke="#8E8E93" stroke-width="2" fill="none"/>
+    <!-- Diagonal slash = "no image" -->
+    <line x1="30" y1="102" x2="90" y2="54" stroke="#8E8E93" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

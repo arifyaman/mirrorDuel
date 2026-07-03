@@ -42,7 +42,6 @@ export function decodeStateSnapshot(data) {
     const z = dv.getFloat32(off, true); off += 4;
     const angle = dv.getFloat32(off, true); off += 4;
     const cooldown = dv.getFloat32(off, true); off += 4;
-    console.log(`[Protocol] Player ${id}: x=${x}, y=${y}, z=${z}, angle=${angle}`);
     players.push({ id, x, y, z, angle, cooldown });
   }
 
@@ -61,7 +60,6 @@ export function decodeStateSnapshot(data) {
     projectiles.push({ id, spawnTick, startX, y, startZ, dirX, dirZ, speed, maxReach });
   }
 
-  console.log(`[Protocol] Snapshot: tick=${tick}, players=${players.length}, projectiles=${projectiles.length}`);
   return { tick, players, projectiles };
 }
 

@@ -1,0 +1,65 @@
+{
+   "action": {
+      "default_icon": {
+         "16": "favicon_opera_one.png",
+         "32": "favicon_opera_one.png"
+      }
+   },
+   "auth_token_scopes": "user:read shodan:aria subscriptions nestore:browser",
+   "author": "Opera Norway AS",
+   "background": {
+      "service_worker": "service_worker.js",
+      "type": "module"
+   },
+   "content_scripts": [ {
+      "js": [ "reader_mode.js" ],
+      "matches": [ "https://*/*" ]
+   }, {
+      "all_frames": true,
+      "js": [ "spotify_frame_interceptor.js" ],
+      "matches": [ "https://open.spotify.com/*" ],
+      "run_at": "document_start",
+      "world": "MAIN"
+   } ],
+   "content_security_policy": {
+      "extension_pages": "script-src 'self'; object-src 'self';",
+      "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:; child-src 'self';"
+   },
+   "description": "Opera AI",
+   "developer": {
+      "name": "Opera Norway AS",
+      "url": "https://opera.com"
+   },
+   "externally_connectable": {
+      "ids": [ "fnmbciokibmcfamkopgdjjpmefbhbmem", "odndjkngipngdmdlfodecoelobjbidna", "enegjkbbakeegngfapepobipndnebkdk", "cgloclgndbkhmjcaddholfcgghcgmmig", "jomoobnpopdknobhmlflchehnnmdniae" ],
+      "matches": [ "chrome://neon/*", "chrome://rich-hints/*", "chrome://startpage/*", "chrome://startpageshared/*", "https://neon.opera.com/cards/*" ]
+   },
+   "homepage_url": "https://opera.com",
+   "host_permissions": [ "https://*/*", "\u003Call_urls>" ],
+   "icons": {
+      "128": "favicon_opera_one.png",
+      "32": "favicon_opera_one.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApNDxqcnu1uTvU+yr4YG8iyGnB/SPZ9yo83lJD37zrRGfIWoe+L4cgVb4Puq2chXHxHwTtTO0VxMU6EbrxDU/ou1WnUaYXX6nLCeMrd7o6y5aArrXxFsXdzQEwv2AmZ62CX1PZ3iQR+EwT5kbNMaR1ZOVXrAVSONgVl4AU0OjruvNOCXy1Vfl74iSxniyW2URdc0WYIdqc1vzv9Yc33s1SBSLPnJKunT47rzKvKF6y9U9uyk9xAgiG7j1mUSTI1INtOxe9oesw4n8h7r0YzgDzn5MSj+03SPPLz51j8YjvIdcdhLMcXHvLjAS3bZeM5O+X66XRITQESviio6O1rbojQIDAQAB",
+   "manifest_version": 3,
+   "name": "Opera AI",
+   "permissions": [ "storage", "unlimitedStorage", "tabs", "windows", "topSites", "bookmarks", "localModelsPrivate", "liveWallpaperMetricsPrivate", "workspacesPrivate", "feedbackPopupPrivate", "operaAccountPrivate", "operaBrowserPrivate", "operaIdentityPrivate", "palette", "shodanPrivate", "startpagePrivate", "statsPrivate", "offscreen", "tabsPrivate", "activeTab", "localMCPPrivate", "alarms", "browserOperatorPrivate", "browserSplitViewPrivate", "tabGroupAnimationPrivate", "scripting", "shoppingPrivate", "history", "management", "textContentsFetcherPrivate", "gcpConnectorPrivate", "userSubscriptionsPrivate", "hardwareCapabilityPrivate", "cdpActionsHandlerPrivate", "aiBlocklistPrivate", "browserSidebarPrivate" ],
+   "sandbox": {
+      "pages": [ "html_preview_sandbox.html" ]
+   },
+   "sidebar_action": {
+      "default_icon": "favicon_opera_one.png",
+      "default_panel": "aria.html",
+      "default_panel_width": 604,
+      "default_title": "Aria",
+      "maximum_panel_width": 755,
+      "minimum_panel_width": 604,
+      "panel_width": 604
+   },
+   "update_url": "https://extension-updates.opera.com/api/omaha/update/",
+   "version": "9.49.0.1",
+   "web_accessible_resources": [ {
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "public/aria-icon-writing-mode-opera.svg", "public/aria-icon-writing-mode-operaGx.svg", "public/aria-icon-writing-mode-operaAir.svg", "shaders/*.glsl", "voice_capture_worklet.js" ]
+   } ]
+}

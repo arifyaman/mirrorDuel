@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="125" viewBox="0 0 120 125" fill="none">
+    <style>
+        .deck-gradient { fill: #80B9F3; filter: url(#deckBlur); opacity: 0.8; }
+        @media (prefers-color-scheme: dark) {
+            .deck-gradient { fill: #2780D2; }
+        }
+    </style>
+    <g class="deck-gradient">
+        <ellipse cx="30" cy="62" rx="40" ry="50"/>
+    </g>
+    <defs>
+        <filter id="deckBlur" x="-100%" y="-100%" width="300%" height="300%" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+            <feGaussianBlur stdDeviation="28"/>
+        </filter>
+    </defs>
+</svg>

@@ -1,0 +1,40 @@
+<svg viewBox="0 0 896 745" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
+<feTurbulence baseFrequency="0.95" numOctaves="1" result="turbulence" type="fractalNoise" seed="5"/>
+<feColorMatrix in="turbulence" type="saturate" values="0" result="grayscale"/>
+<feComponentTransfer in="grayscale" result="contrast">
+<feFuncA type="discrete" tableValues="0 0.21 0.11 0.27 0.13 0.24 0.16 0.21 0.11 0.19 0.13 0.27 0.16 0.21 0.11 0.24"/>
+</feComponentTransfer>
+<feComposite in="contrast" in2="SourceGraphic" operator="multiply"/>
+</filter>
+<filter id="filter0_f_3659_52323" x="52.4426" y="-83.3335" width="1181.37" height="781.824" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="75" result="effect1_foregroundBlur_3659_52323"/>
+</filter>
+<filter id="filter1_f_3659_52323" x="-118.625" y="-65.311" width="1143.92" height="845.094" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="75" result="effect1_foregroundBlur_3659_52323"/>
+</filter>
+<filter id="filter2_f_3659_52323" x="-337.064" y="65.9517" width="1176.05" height="653.785" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="75" result="effect1_foregroundBlur_3659_52323"/>
+</filter>
+</defs>
+
+<g filter="url(#noiseFilter)">
+<rect width="896" height="745" rx="8" fill="white"/>
+<g filter="url(#filter0_f_3659_52323)">
+<path d="M701.381 622.468C594.556 557.673 806.715 503.403 519.253 389.556C231.791 275.709 127.478 -8.31111 414.181 135.629C700.883 279.57 774.932 67.3318 958.81 181.161C1142.69 294.991 808.205 687.263 701.381 622.468Z" fill="#A4C3E0" fill-opacity="0.2"/>
+</g>
+<g filter="url(#filter1_f_3659_52323)">
+<path d="M233.353 218.675C558.267 548.359 433.121 286.107 716.706 430.054C1000.29 574.001 889.722 813.964 495.308 393.252C100.894 -27.4597 397.979 301.188 214.541 285.342C31.103 269.497 -91.5601 -111.01 233.353 218.675Z" fill="#BAA4E0" fill-opacity="0.2"/>
+</g>
+<g filter="url(#filter2_f_3659_52323)">
+<path d="M500.993 563.724C156.514 534.477 232.972 466.17 -53.5546 416.118C-340.081 366.067 -117.41 155.703 163.591 232.728C444.593 309.752 187.427 180.784 421.024 347.715C654.62 514.646 845.473 592.971 500.993 563.724Z" fill="#A4C3E0" fill-opacity="0.2"/>
+</g>
+</g>
+</svg>

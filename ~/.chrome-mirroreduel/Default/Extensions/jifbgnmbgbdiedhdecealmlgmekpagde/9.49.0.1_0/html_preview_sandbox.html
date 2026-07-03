@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset="UTF-8"/><style>body {
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        background-color: #ffffff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-color: #000000;
+        }
+      }</style></head><body><script>// Error handler script to inject into user HTML
+      const errorHandlerScript = `
+        <script>
+          window.onerror = function (message, source, lineno, colno, error) {
+            const errorMessage = message || "An error occurred while rendering the preview";
+            const fullError = errorMessage + " " + (error?.message || "") + " " + (error?.name || "");
+
+            // Check if it's a sandbox-related error
+            if (
+              fullError.includes("SecurityError") ||
+              fullError.includes("sandboxed") ||
+              fullError.includes("localStorage") ||
+              fullError.includes("sessionStorage")
+            ) {
+              // Send error to parent
+              if (window.parent !== window) {
+                window.parent.postMessage(
+                  {
+                    type: "PREVIEW_ERROR",
+                    message: errorMessage,
+                  },
+                  "*",
+                );
+              } else if (window.opener) {
+                window.opener.postMessage(
+                  {
+                    type: "PREVIEW_ERROR",
+                    message: errorMessage,
+                  },
+                  "*",
+                );
+              }
+            }
+
+            return false; // Allow error to propagate to console
+          };
+        <\/script>
+      `;
+
+      // Listen for messages from both parent (iframe mode) and opener (new tab mode)
+      window.addEventListener("message", function (event) {
+        // Update the page content with the received HTML
+        if (event.data && event.data.type === "UPDATE_HTML") {
+          try {
+            let htmlToWrite = event.data.html;
+
+            // Inject error handler script into the HTML
+            // Try to inject after <head> tag, or at the beginning if no <head> exists
+            const headMatch = htmlToWrite.match(/<head[^>]*>/i);
+            if (headMatch) {
+              const insertPosition = headMatch.index + headMatch[0].length;
+              htmlToWrite =
+                htmlToWrite.slice(0, insertPosition) +
+                errorHandlerScript +
+                htmlToWrite.slice(insertPosition);
+            } else {
+              // No <head> tag, inject at the beginning
+              htmlToWrite = errorHandlerScript + htmlToWrite;
+            }
+
+            document.open();
+            document.write(htmlToWrite);
+            document.close();
+          } catch (error) {
+            console.error("[HTML Preview Sandbox] Error during document.write:", error);
+          }
+        }
+      });
+
+      // Notify parent/opener that sandbox is ready
+      if (window.parent !== window) {
+        // Iframe mode - notify parent
+        window.parent.postMessage({ type: "SANDBOX_READY" }, "*");
+      } else if (window.opener) {
+        // New tab mode - notify opener
+        window.opener.postMessage({ type: "SANDBOX_READY" }, "*");
+      }</script></body></html>

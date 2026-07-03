@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 17 17" fill="none">
+  <rect x="4.45898" y="8.75565" width="1.3125" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="6.77148" y="8.75565" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="9.02148" y="8.75565" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="11.2715" y="8.75565" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="4.45898" y="11.2556" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="6.70898" y="11.2556" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="8.95898" y="11.2556" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="11.209" y="11.2556" width="1.25" height="1.25" rx="0.1" fill="#868F98"/>
+  <rect x="2.375" y="4.06689" width="12.25" height="10.8081" rx="1.375" stroke="#868F98" stroke-width="1.25"/>
+  <path d="M4.36467 4L4.37891 2.45386" stroke="#868F98" stroke-width="1.25" stroke-linecap="round"/>
+  <path d="M2.78922 6.6463L14 6.6463" stroke="#868F98" stroke-width="1.25" stroke-linecap="round"/>
+  <path d="M12.6236 4L12.6289 2.43616" stroke="#868F98" stroke-width="1.25" stroke-linecap="round"/>
+</svg>
