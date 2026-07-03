@@ -1,0 +1,42 @@
+package config
+
+// Config holds all game configuration, mirroring config/index.ts.
+type Config struct {
+	QUICPort      int
+	HTTPPort      int
+	FloorSize     float32
+	PlayerSpeed   float32
+	LerpFactor    float32
+	SpeedStrafe   float32
+	Projectile    ProjectileConfig
+}
+
+// ProjectileConfig mirrors the skills.projectile config.
+type ProjectileConfig struct {
+	Cooldown      float32
+	Speed         float32
+	MaxReach      float32
+	MaxParticles  int
+	BurstSpeed    float32
+	BurstDuration float32
+}
+
+// Default returns the default game configuration.
+func Default() *Config {
+	return &Config{
+		QUICPort:    4433,
+		HTTPPort:    8081,
+		FloorSize:   10,
+		PlayerSpeed: 5,
+		LerpFactor:  8,
+		SpeedStrafe: 0.75,
+		Projectile: ProjectileConfig{
+			Cooldown:      4,
+			Speed:         7.5,
+			MaxReach:      4,
+			MaxParticles:  18,
+			BurstSpeed:    8,
+			BurstDuration: 1.5,
+		},
+	}
+}
