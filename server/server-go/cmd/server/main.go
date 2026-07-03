@@ -106,9 +106,6 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.reg.Add(id, sess)
 
 		fmt.Printf("[WT] %s connected (total: %d)\n", id, h.reg.Count())
-		if h.rm.Callbacks.OnSessionCreated != nil {
-			h.rm.Callbacks.OnSessionCreated(sess)
-		}
 
 		// Wait for session to close
 		<-conn.Context().Done()

@@ -111,6 +111,7 @@ func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult 
 
 	playerID := len(room.Players) + 1
 	_ = room.AddPlayer(playerID, playerName, session)
+	session.(*network.Session).SetPlayerID(playerID)
 
 	// Find opponent
 	var opponentName string
@@ -144,11 +145,6 @@ func (m *RoomManager) handlePlayerInput(session SessionIface, payload []byte) {
 		for _, player := range room.Players {
 			if player.Session == session {
 				player.QueueInput(*input)
-
-				// Skill activation (immediate, same as TS version)
-				if input.Flags&0x01 != 0 {
-					room.ActivateProjectile(player, input.MouseX, input.MouseY)
-				}
 				return
 			}
 		}
@@ -195,7 +191,9 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 	for i := len(m.Rooms) - 1; i >= 0; i-- {
 		room := m.Rooms[i]
+		room.mu.Lock()
 		if _, hasPlayer := room.Players[playerID]; !hasPlayer {
+			room.mu.Unlock()
 			continue
 		}
 
@@ -213,6 +211,8 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 			fmt.Printf("[Room] Empty room %d removed\n", room.RoomID)
 			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
 		}
+
+		room.mu.Unlock()
 
 		if m.Callbacks.OnSessionDisconnect != nil {
 			m.Callbacks.OnSessionDisconnect(session)

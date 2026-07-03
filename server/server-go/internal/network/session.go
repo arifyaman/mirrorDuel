@@ -39,6 +39,11 @@ func (s *Session) PlayerID() int {
 	return s.playerID
 }
 
+// SetPlayerID sets the player ID for this session.
+func (s *Session) SetPlayerID(id int) {
+	s.playerID = id
+}
+
 // SetMessageHandler sets the callback for incoming messages.
 func (s *Session) SetMessageHandler(fn func(msg *SessionMessage)) {
 	s.onMessage = fn

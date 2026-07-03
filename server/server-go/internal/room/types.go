@@ -127,13 +127,6 @@ func (p *Player) ProcessInputs(dt float32) {
 		p.Angle = float32(math.Atan2(float64(mdx), float64(mdz)))
 	}
 
-	// Handle projectile activation (flags & 0x01)
-	if last.Flags&0x01 != 0 {
-		if p.GameSession != nil {
-			p.GameSession.ActivateProjectile(p, last.MouseX, last.MouseY)
-		}
-	}
-
 	// Cooldown decay
 	if p.Cooldown > 0 {
 		p.Cooldown -= dt

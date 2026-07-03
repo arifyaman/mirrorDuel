@@ -1,21 +1,20 @@
 package room
 
 import (
-	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 
 	"mirror-duel-server-go/internal/config"
 	"mirror-duel-server-go/internal/network"
 )
 
-var nextProjectileID = 1
-
 // GameSession mirrors the TypeScript GameSession (a 1v1 room).
 type GameSession struct {
 	RoomID      int
 	tick        int
 	Config      *config.Config
+	mu          sync.Mutex
 	Players     map[int]*Player
 	Projectiles []Projectile
 }
@@ -33,16 +32,19 @@ func NewGameSession(roomID int, cfg *config.Config) *GameSession {
 
 // TickStep executes one game tick (60Hz = 16.67ms).
 func (s *GameSession) TickStep() {
+	s.mu.Lock()
 	s.tick++
 
 	// Process buffered inputs for all players
 	firedIDs := make(map[int]bool)
+	firedPlayers := make(map[int]*Player)
 	for _, player := range s.Players {
 		player.ProcessInputs(0.01667)
 		if player.JustFired {
 			firedIDs[player.ID] = true
+			firedPlayers[player.ID] = player
+			player.JustFired = false
 		}
-		player.JustFired = false
 	}
 
 	// Mirror cooldown reduction: when any player fires, reduce all OTHER players' cooldowns by 50%
@@ -64,10 +66,57 @@ func (s *GameSession) TickStep() {
 		}
 	}
 	s.Projectiles = alive
+
+	// Get snapshot data while holding lock
+	snapshotTick := uint16(s.tick)
+	snapshotPlayers := make([]network.PlayerSnapshot, 0, len(s.Players))
+	for _, p := range s.Players {
+		snapshotPlayers = append(snapshotPlayers, network.PlayerSnapshot{
+			ID:       uint8(p.ID),
+			X:        p.X,
+			Y:        p.Y,
+			Z:        p.Z,
+			Angle:    p.Angle,
+			Cooldown: p.Cooldown,
+		})
+	}
+	snapshotProjectiles := make([]network.ProjectileSnapshot, 0, len(s.Projectiles))
+	for _, p := range s.Projectiles {
+		snapshotProjectiles = append(snapshotProjectiles, network.ProjectileSnapshot{
+			ID:        uint8(p.ID),
+			SpawnTick: uint16(p.SpawnTick),
+			StartX:    p.StartX,
+			Y:         p.Y,
+			StartZ:    p.StartZ,
+			DirX:      p.DirX,
+			DirZ:      p.DirZ,
+			Speed:     p.Speed,
+			MaxReach:  p.MaxReach,
+		})
+	}
+	s.mu.Unlock()
+
+	// Spawn projectiles for fired players (outside lock)
+	for _, player := range firedPlayers {
+		s.ActivateProjectile(player, player.X, player.Z)
+	}
+
+	// Broadcast (outside lock)
+	if len(snapshotPlayers) > 0 {
+		data := network.EncodeStateSnapshot(snapshotTick, snapshotPlayers, snapshotProjectiles)
+		for _, p := range s.Players {
+			if p.Session != nil {
+				p.Session.SendSnapshot(data)
+			}
+		}
+	}
 }
 
 // GetSnapshot returns player and projectile data for encoding.
 func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapshot, projectiles []network.ProjectileSnapshot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	tick = uint16(s.tick)
 
 	players = make([]network.PlayerSnapshot, 0, len(s.Players))
@@ -97,12 +146,14 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 		})
 	}
 
-	fmt.Printf("[Server] Tick %d: %d players, %d projectiles\n", tick, len(players), len(projectiles))
 	return
 }
 
 // AddPlayer creates and returns a new Player for this session.
 func (s *GameSession) AddPlayer(id int, name string, session SessionIface) *Player {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	var x, z float32
 	if id == 1 {
 		x = -2
@@ -122,6 +173,9 @@ func (s *GameSession) AddPlayer(id int, name string, session SessionIface) *Play
 
 // ActivateProjectile spawns a projectile if the player's cooldown allows.
 func (s *GameSession) ActivateProjectile(p *Player, mouseX, mouseY float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if p.Cooldown > 0 {
 		return
 	}
