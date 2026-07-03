@@ -160,7 +160,8 @@ export class NetworkClient {
       this.writer = this.stream.writable.getWriter();
 
       this.readLoop();
-      this.sendJoin(nickname);
+      await this.sendJoin(nickname);
+      console.log('[WT] Join sent');
       this.setStatus('connected');
     } catch (err) {
       console.error('[WT] Connection error:', err.message);
@@ -219,13 +220,15 @@ export class NetworkClient {
     }, 2000);
   }
 
-  sendJoin(name) {
-    if (!this.writer || this.state !== 'connected') return;
+  async sendJoin(name) {
+    if (!this.writer) return;
     const data = encodeJoinRoom(name);
     const msg = new Uint8Array(1 + data.length);
     msg[0] = MSG_JOIN_ROOM;
     msg.set(data, 1);
-    this.writer.write(msg);
+    console.log('[WT] Sending JOIN_ROOM:', msg);
+    await this.writer.write(msg);
+    console.log('[WT] JOIN_ROOM sent');
   }
 
   handleSnapshot(payload) {

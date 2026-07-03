@@ -89,7 +89,7 @@ func (s *Session) readLoop() {
 	for s.connected {
 		n, err := s.stream.Read(buf)
 		if err != nil {
-			fmt.Printf("[Session] %s stream read error: %v\n", s.id, err)
+			fmt.Printf("[Session] %s stream read error: %v (n=%d)\n", s.id, err, n)
 			s.connected = false
 			return
 		}
@@ -98,8 +98,10 @@ func (s *Session) readLoop() {
 			continue
 		}
 
+		fmt.Printf("[Session] %s received %d bytes: %v\n", s.id, n, buf[:n])
 		msg := ParseMessage(buf[:n])
 		if msg == nil {
+			fmt.Printf("[Session] %s failed to parse message\n", s.id)
 			continue
 		}
 

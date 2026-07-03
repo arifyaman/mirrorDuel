@@ -97,6 +97,7 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("[WT] Stream accept error: %v\n", err)
 			return
 		}
+		fmt.Printf("[WT] Stream accepted\n")
 
 		id := fmt.Sprintf("s%d", atomic.AddInt64(&sessionCounter, 1))
 		sess := network.NewSession(id, conn, stream)
