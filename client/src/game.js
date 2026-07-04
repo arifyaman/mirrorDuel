@@ -52,6 +52,7 @@ export class Game {
     this._prevMyCooldown = 0;
     this._hudCreated = false;
     this._myPlayerPos = { x: 0, z: 0 };
+    this._cameraTarget = { x: 0, z: 0 };
     this.gameTitle = new GameTitle();
   }
 
@@ -101,6 +102,20 @@ export class Game {
     }
     this._prevMyCooldown = this.myCooldown;
 
+    // Camera target: midpoint between players if 2+, else single player
+    if (players.length >= 2) {
+      let cx = 0, cz = 0;
+      for (const p of players) {
+        cx += p.x;
+        cz += p.z;
+      }
+      this._cameraTarget.x = cx / players.length;
+      this._cameraTarget.z = cz / players.length;
+    } else {
+      this._cameraTarget.x = this._myPlayerPos.x;
+      this._cameraTarget.z = this._myPlayerPos.z;
+    }
+
     this.physics.applySnapshot(players, projectiles);
   }
 
@@ -114,8 +129,8 @@ export class Game {
     this.physics.updateProjectiles();
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
-      this.scene.cameraTargetMid.x = this._myPlayerPos.x;
-      this.scene.cameraTargetMid.z = this._myPlayerPos.z;
+      this.scene.cameraTargetMid.x = this._cameraTarget.x;
+      this.scene.cameraTargetMid.z = this._cameraTarget.z;
       this.scene.updateCamera(dt);
     }
     if (this.myCooldown > 0) {
