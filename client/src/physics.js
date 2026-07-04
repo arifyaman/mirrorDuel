@@ -197,7 +197,7 @@ export class Physics {
     lightEntity.addComponent('light', {
       type: 'point',
       color: new Color(0.3, 1.0, 1.0),
-      intensity: 25,
+      intensity: 5,
       range: 0.8,
       shadow: false
     });
