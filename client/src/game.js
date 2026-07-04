@@ -15,7 +15,6 @@ import { Network } from './network.js';
 import { Physics } from './physics.js';
 import { Input } from './input.js';
 import { CooldownHUD } from './hud.js';
-import { SpellHUD } from './spell-notification.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
@@ -26,12 +25,6 @@ export class Game {
     this.canvas = document.createElement('canvas');
     this.canvas.addEventListener('webglcontextlost', e => e.preventDefault());
     document.body.appendChild(this.canvas);
-
-    // Load cool font
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
 
     this.app = new Application(this.canvas, {
       graphicsDeviceOptions: { antialias: false }
@@ -49,10 +42,7 @@ export class Game {
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
     this.myCooldown = 0;
-    this._lastMyCooldown = 0;
-    this._lastOpponentCooldown = 0;
     this._hudCreated = false;
-    this.spellHUD = new SpellHUD();
   }
 
   start() {
@@ -92,25 +82,6 @@ export class Game {
     if (myPlayer) {
       this.myCooldown = Math.max(0, myPlayer.cooldown);
     }
-
-    const opponent = players.find(p => p.id !== this.network.myPlayerId);
-    const oppCooldown = opponent ? Math.max(0, opponent.cooldown) : 0;
-
-    // Detect debuff trigger: opponent cooldown drops to ~50%
-    let isDebuffTriggered = false;
-    if (this._lastOpponentCooldown > 0) {
-      const ratio = oppCooldown / this._lastOpponentCooldown;
-      if (ratio < 0.6 && ratio > 0.4) {
-        isDebuffTriggered = true;
-      }
-    }
-
-    if (this.spellHUD) {
-      this.spellHUD.update(this.myCooldown, opponent, isDebuffTriggered);
-    }
-
-    this._lastMyCooldown = this.myCooldown;
-    this._lastOpponentCooldown = oppCooldown;
 
     this.physics.applySnapshot(players, projectiles);
   }
