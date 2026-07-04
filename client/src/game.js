@@ -116,6 +116,9 @@ export class Game {
       this._cameraTarget.z = this._myPlayerPos.z;
     }
 
+    // Pass player positions to scene for zoom calculation
+    this.scene.setPlayerPositions(players.map(p => ({ x: p.x, z: p.z })));
+
     this.physics.applySnapshot(players, projectiles);
   }
 

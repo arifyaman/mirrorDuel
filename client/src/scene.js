@@ -6,7 +6,10 @@ export class Scene {
     this.cameraNode = null;
     this.cameraComponent = null;
     this.cameraOffset = { x: 0, y: 10, z: 16 };
+    this.cameraBaseY = 10;
+    this.cameraBaseZ = 16;
     this.cameraFollowFactor = 0.4;
+    this._playerPositions = [];
     this.cameraTargetMid = { x: 0, y: 0, z: 0 };
     this.createFloor();
     this.createCamera();
@@ -93,15 +96,32 @@ updateCamera(dt) {
     const off = this.cameraOffset;
     const target = this.cameraTargetMid;
     const lerpFactor = 1 - Math.exp(-4 * (dt || 0.016));
+
+    // Calculate zoom scale based on player spread
+    let zoomScale = 1;
+    if (this._playerPositions.length >= 2) {
+      const p0 = this._playerPositions[0];
+      const p1 = this._playerPositions[1];
+      const dist = Math.sqrt(
+        (p1.x - p0.x) ** 2 + (p1.z - p0.z) ** 2
+      );
+      // Scale up when players are far apart
+      zoomScale = 1 + Math.max(0, dist - 10) * 0.08;
+    }
+
+    const baseY = this.cameraBaseY * zoomScale;
+    const baseZ = this.cameraBaseZ * zoomScale;
+    const baseX = 0;
     const pos = this.cameraNode.getPosition();
-    const baseX = target.x * this.cameraFollowFactor + off.x;
-    const baseY = target.y * this.cameraFollowFactor + off.y;
-    const baseZ = target.z * this.cameraFollowFactor + off.z;
     this.cameraNode.setPosition(
-      pos.x + (baseX - pos.x) * lerpFactor,
+      pos.x + (baseX + target.x * this.cameraFollowFactor - pos.x) * lerpFactor,
       pos.y + (baseY - pos.y) * lerpFactor,
-      pos.z + (baseZ - pos.z) * lerpFactor
+      pos.z + (baseZ + target.z * this.cameraFollowFactor - pos.z) * lerpFactor
     );
+  }
+
+  setPlayerPositions(positions) {
+    this._playerPositions = positions;
   }
 
   createLight() {
