@@ -10,8 +10,8 @@ export class CooldownHUD {
   }
 
   createElements() {
-    const ringSize = 80;
-    const halfSide = 70;
+    const ringSize = 52;
+    const halfSide = 48;
     const triHeight = Math.round(halfSide * Math.sqrt(3));
 
     this.container = document.createElement('div');
@@ -56,7 +56,7 @@ export class CooldownHUD {
 
       const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       iconSvg.setAttribute('viewBox', '0 0 80 80');
-      iconSvg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;';
+      iconSvg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:' + ringSize + 'px;height:' + ringSize + 'px;';
 
       const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       iconGroup.setAttribute('transform', 'translate(40,40)');
@@ -64,7 +64,7 @@ export class CooldownHUD {
 
       const iconColor = i === 0 ? '#ff4444' : (i === 1 ? '#ffaa00' : '#4488ff');
       iconGroup.setAttribute('stroke', iconColor);
-      iconGroup.setAttribute('stroke-width', '2.5');
+      iconGroup.setAttribute('stroke-width', '2.8');
       iconGroup.setAttribute('stroke-linecap', 'round');
       iconGroup.setAttribute('stroke-linejoin', 'round');
       iconGroup.setAttribute('fill', 'none');
@@ -73,41 +73,41 @@ export class CooldownHUD {
         // Projectile: crosshair / reticle
         const crosshair = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         crosshair.setAttribute('stroke', iconColor);
-        crosshair.setAttribute('stroke-width', '2');
+        crosshair.setAttribute('stroke-width', '2.5');
 
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', '0'); circle.setAttribute('cy', '0'); circle.setAttribute('r', '14');
+        circle.setAttribute('cx', '0'); circle.setAttribute('cy', '0'); circle.setAttribute('r', '11');
         circle.setAttribute('fill', 'none');
         crosshair.appendChild(circle);
 
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('cx', '0'); dot.setAttribute('cy', '0'); dot.setAttribute('r', '2');
+        dot.setAttribute('cx', '0'); dot.setAttribute('cy', '0'); dot.setAttribute('r', '1.5');
         dot.setAttribute('fill', iconColor);
         dot.setAttribute('stroke', 'none');
         crosshair.appendChild(dot);
 
         const topLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        topLine.setAttribute('x1', '0'); topLine.setAttribute('y1', '-20'); topLine.setAttribute('x2', '0'); topLine.setAttribute('y2', '-17');
+        topLine.setAttribute('x1', '0'); topLine.setAttribute('y1', '-16'); topLine.setAttribute('x2', '0'); topLine.setAttribute('y2', '-13');
         crosshair.appendChild(topLine);
 
         const bottomLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        bottomLine.setAttribute('x1', '0'); bottomLine.setAttribute('y1', '17'); bottomLine.setAttribute('x2', '0'); bottomLine.setAttribute('y2', '20');
+        bottomLine.setAttribute('x1', '0'); bottomLine.setAttribute('y1', '13'); bottomLine.setAttribute('x2', '0'); bottomLine.setAttribute('y2', '16');
         crosshair.appendChild(bottomLine);
 
         const leftLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        leftLine.setAttribute('x1', '-20'); leftLine.setAttribute('y1', '0'); leftLine.setAttribute('x2', '-17'); leftLine.setAttribute('y2', '0');
+        leftLine.setAttribute('x1', '-16'); leftLine.setAttribute('y1', '0'); leftLine.setAttribute('x2', '-13'); leftLine.setAttribute('y2', '0');
         crosshair.appendChild(leftLine);
 
         const rightLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        rightLine.setAttribute('x1', '17'); rightLine.setAttribute('y1', '0'); rightLine.setAttribute('x2', '20'); rightLine.setAttribute('y2', '0');
+        rightLine.setAttribute('x1', '13'); rightLine.setAttribute('y1', '0'); rightLine.setAttribute('x2', '16'); rightLine.setAttribute('y2', '0');
         crosshair.appendChild(rightLine);
 
         iconGroup.appendChild(crosshair);
 
-      } else if (i === 1) {
+      } else     if (i === 1) {
         // Dash: lightning bolt
         const bolt = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        bolt.setAttribute('points', '2,-18 -8,-2 0,-2 -4,18 10,2 2,2');
+        bolt.setAttribute('points', '2,-16 -7,-1 0,-1 -3,16 9,-1 2,-1');
         bolt.setAttribute('fill', iconColor);
         bolt.setAttribute('stroke', iconColor);
         bolt.setAttribute('stroke-width', '1.5');
@@ -116,22 +116,22 @@ export class CooldownHUD {
       } else {
         // Shield: classic shield shape
         const shield = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        shield.setAttribute('d', 'M0,-18 L16,-12 L16,4 C16,14 8,20 0,24 C-8,20 -16,14 -16,4 L-16,-12 Z');
+        shield.setAttribute('d', 'M0,-16 L14,-10 L14,3 C14,12 8,17 0,21 C-8,17 -14,12 -14,3 L-14,-10 Z');
         shield.setAttribute('fill', iconColor + '40');
         shield.setAttribute('stroke', iconColor);
         shield.setAttribute('stroke-width', '2.5');
         iconGroup.appendChild(shield);
 
         const innerLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        innerLine.setAttribute('x1', '0'); innerLine.setAttribute('y1', '-8');
-        innerLine.setAttribute('x2', '0'); innerLine.setAttribute('y2', '14');
+        innerLine.setAttribute('x1', '0'); innerLine.setAttribute('y1', '-7');
+        innerLine.setAttribute('x2', '0'); innerLine.setAttribute('y2', '12');
         innerLine.setAttribute('stroke', iconColor);
         innerLine.setAttribute('stroke-width', '2');
         iconGroup.appendChild(innerLine);
 
         const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        hLine.setAttribute('x1', '-8'); hLine.setAttribute('y1', '4');
-        hLine.setAttribute('x2', '8'); hLine.setAttribute('y2', '4');
+        hLine.setAttribute('x1', '-7'); hLine.setAttribute('y1', '3');
+        hLine.setAttribute('x2', '7'); hLine.setAttribute('y2', '3');
         hLine.setAttribute('stroke', iconColor);
         hLine.setAttribute('stroke-width', '2');
         iconGroup.appendChild(hLine);
