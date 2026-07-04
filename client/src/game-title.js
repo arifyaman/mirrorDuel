@@ -5,6 +5,8 @@ export class GameTitle {
     this.subtitle = null;
     this.mouseX = 0;
     this.mouseY = 0;
+    this.jumping = false;
+    this.jumpTime = 0;
     this.createElements();
   }
 
@@ -12,13 +14,13 @@ export class GameTitle {
     this.container = document.createElement('div');
     this.container.style.cssText = `
       position: fixed;
-      top: 40px;
+      top: 36px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       pointer-events: none;
       z-index: 200;
       will-change: transform;
@@ -28,11 +30,11 @@ export class GameTitle {
     this.title = document.createElement('div');
     this.title.style.cssText = `
       font-family: 'Orbitron', 'Segoe UI', sans-serif;
-      font-size: 28px;
+      font-size: 36px;
       font-weight: 900;
       color: #fff;
       text-transform: uppercase;
-      letter-spacing: 8px;
+      letter-spacing: 10px;
       text-shadow:
         0 0 10px #f00,
         0 0 20px #f44,
@@ -52,7 +54,7 @@ export class GameTitle {
     this.subtitle = document.createElement('div');
     this.subtitle.style.cssText = `
       font-family: 'Courier New', monospace;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: bold;
       color: #ffaa44;
       letter-spacing: 2px;
@@ -62,8 +64,9 @@ export class GameTitle {
       text-transform: uppercase;
       opacity: 0.85;
       text-align: center;
-      max-width: 320px;
+      max-width: 360px;
       line-height: 1.5;
+      will-change: transform;
     `;
     this.subtitle.innerHTML = 'Using a spell gives 50% cooldown for your opponent!';
 
@@ -77,6 +80,12 @@ export class GameTitle {
     });
   }
 
+  triggerJump() {
+    if (this.jumping) return;
+    this.jumping = true;
+    this.jumpTime = performance.now();
+  }
+
   update() {
     // Mouse parallax offset
     const centerX = window.innerWidth / 2;
@@ -84,12 +93,39 @@ export class GameTitle {
     const dx = (this.mouseX - centerX) / centerX;
     const dy = (this.mouseY - centerY) / centerY;
 
+    // Jump animation
+    let jumpY = 0;
+    let jumpScale = 1;
+    if (this.jumping) {
+      const elapsed = performance.now() - this.jumpTime;
+      const duration = 500;
+
+      if (elapsed < duration) {
+        // Bouncy overshoot curve
+        const t = elapsed / duration;
+        // Cubic ease out with bounce
+        const eased = t < 0.5
+          ? 4 * t * t * t
+          : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        // Subtle scale pulse
+        jumpScale = 1 + Math.sin(t * Math.PI) * 0.12;
+        // Slight upward hop
+        jumpY = -Math.sin(t * Math.PI) * 6;
+      } else {
+        this.jumping = false;
+        jumpScale = 1;
+        jumpY = 0;
+      }
+    }
+
     this.container.style.transform = `
       translateX(calc(-50% + ${dx * 12}px))
-      translateY(${dy * 6}px)
+      translateY(${dy * 6 + jumpY}px)
       rotateX(${dy * -2}deg)
       rotateY(${dx * 3}deg)
     `;
+
+    this.subtitle.style.transform = `scale(${jumpScale})`;
   }
 
   destroy() {

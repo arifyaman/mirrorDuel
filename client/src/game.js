@@ -49,6 +49,7 @@ export class Game {
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
     this.myCooldown = 0;
+    this._prevMyCooldown = 0;
     this._hudCreated = false;
     this.gameTitle = new GameTitle();
   }
@@ -90,6 +91,12 @@ export class Game {
     if (myPlayer) {
       this.myCooldown = Math.max(0, myPlayer.cooldown);
     }
+
+    // Detect spell fire: cooldown jumps from 0 to >0
+    if (myPlayer && this._prevMyCooldown <= 0 && myPlayer.cooldown > 0) {
+      if (this.gameTitle) this.gameTitle.triggerJump();
+    }
+    this._prevMyCooldown = this.myCooldown;
 
     this.physics.applySnapshot(players, projectiles);
   }
