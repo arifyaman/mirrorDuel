@@ -15,6 +15,7 @@ import { Network } from './network.js';
 import { Physics } from './physics.js';
 import { Input } from './input.js';
 import { CooldownHUD } from './hud.js';
+import { GameTitle } from './game-title.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
@@ -25,6 +26,12 @@ export class Game {
     this.canvas = document.createElement('canvas');
     this.canvas.addEventListener('webglcontextlost', e => e.preventDefault());
     document.body.appendChild(this.canvas);
+
+    // Load cool font
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
 
     this.app = new Application(this.canvas, {
       graphicsDeviceOptions: { antialias: false }
@@ -43,6 +50,7 @@ export class Game {
     this.input.init();
     this.myCooldown = 0;
     this._hudCreated = false;
+    this.gameTitle = new GameTitle();
   }
 
   start() {
@@ -94,6 +102,7 @@ export class Game {
   update(dt) {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
+    if (this.gameTitle) this.gameTitle.update();
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);
     }
