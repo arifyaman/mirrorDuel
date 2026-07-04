@@ -18,8 +18,8 @@ export class Scene {
     floor.setLocalScale(10, 0.05, 10);
     floor.setPosition(0, -0.5, 0);
     const floorMaterial = new StandardMaterial();
-    floorMaterial.diffuse = new Color(0.06, 0.06, 0.12);
-    floorMaterial.roughness = 0.8;
+    floorMaterial.diffuse = new Color(0.12, 0.12, 0.18);
+    floorMaterial.roughness = 0.6;
     floorMaterial.metalness = 0.1;
     floorMaterial.receiveShadows = true;
     floorMaterial.update();
@@ -87,14 +87,14 @@ export class Scene {
   }
 
   createLight() {
-    // Dimmer ambient
+    // Ambient fill
     const ambientLight = new Entity('ambient');
     ambientLight.addComponent('light', {
       type: 'ambient',
-      color: new Color(0.15, 0.15, 0.2),
+      color: new Color(0.25, 0.25, 0.35),
       intensity: 1.0,
-      skyColor: new Color(0.1, 0.1, 0.15),
-      groundColor: new Color(0.05, 0.05, 0.08)
+      skyColor: new Color(0.15, 0.15, 0.25),
+      groundColor: new Color(0.08, 0.08, 0.12)
     });
     this.app.root.addChild(ambientLight);
 
@@ -102,8 +102,8 @@ export class Scene {
     const directionalLight = new Entity('sun');
     directionalLight.addComponent('light', {
       type: 'directional',
-      color: new Color(0.8, 0.85, 1.0),
-      intensity: 1.5,
+      color: new Color(0.9, 0.9, 1.0),
+      intensity: 2.5,
       castShadows: true,
       shadowBias: 0.3,
       normalOffsetBias: 0.02,
@@ -121,7 +121,8 @@ export class Scene {
     wallMat.diffuse = new Color(0.6, 0.0, 0.0);
     wallMat.emissive = new Color(0.3, 0.0, 0.0);
     wallMat.emissiveIntensity = 0.3;
-    wallMat.transparent = true;
+    wallMat.alphaWrite = false;
+    wallMat.blendType = 2;
     wallMat.opacity = 0.25;
     wallMat.receiveShadows = true;
     wallMat.update();
@@ -161,7 +162,7 @@ export class Scene {
   applyPostProcessing() {
     this.cameraFrame = new CameraFrame(this.app, this.cameraComponent);
     this.cameraFrame.rendering.toneMapping = TONEMAP_ACES;
-    this.cameraFrame.bloom.intensity = 0.04;
+    this.cameraFrame.bloom.intensity = 0.10;
     this.cameraFrame.taa.enabled = true;
     this.cameraFrame.taa.jitter = 1;
     this.cameraFrame.update();

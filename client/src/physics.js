@@ -7,6 +7,7 @@ export class Physics {
     this.simTime = 0;
     this.playerEntities = new Map();
     this.indicatorEntities = new Map();
+    this.playerLights = new Map();
     this.projectileEntities = new Map();
     this.app = app;
   }
@@ -18,23 +19,28 @@ export class Physics {
 
   applyPlayers(players) {
     const colors = {
-      1: { diffuse: new Color(1, 0.15, 0.15), emissive: new Color(1, 0.05, 0.05) },
-      2: { diffuse: new Color(0.15, 0.15, 1), emissive: new Color(0.05, 0.05, 1) }
+      1: { diffuse: new Color(1, 0.2, 0.2), emissive: new Color(1, 0.1, 0.05), light: new Color(1, 0.3, 0.2) },
+      2: { diffuse: new Color(0.2, 0.2, 1), emissive: new Color(0.05, 0.05, 1), light: new Color(0.2, 0.3, 1) }
     };
 
     for (const p of players) {
       let entity = this.playerEntities.get(p.id);
       if (!entity) {
-        const col = colors[p.id] || { diffuse: new Color(0.5, 0.5, 0.5), emissive: new Color(0.2, 0.2, 0.2) };
-        entity = this.createGlowingPlayer(p.id, col.diffuse, col.emissive);
+        const col = colors[p.id] || { diffuse: new Color(0.5, 0.5, 0.5), emissive: new Color(0.2, 0.2, 0.2), light: new Color(0.5, 0.5, 0.5) };
+        entity = this.createGlowingPlayer(p.id, col.diffuse, col.emissive, col.light);
         entity.enabled = false;
       }
 
-      // Pulsing emissive for player
+      // Bright pulsing emissive for player
       const mat = entity.render.material;
-      if (mat.emissiveIntensity === undefined) {
-        mat.emissiveIntensity = 0.8;
-        mat.update();
+      mat.emissiveIntensity = 1.5;
+      mat.update();
+
+      // Edge overlay even brighter
+      const edges = entity.children.find(c => c.name.startsWith('edges'));
+      if (edges && edges.render) {
+        edges.render.material.emissiveIntensity = 2.0;
+        edges.render.material.update();
       }
 
       entity.setPosition(p.x, p.y, p.z);
@@ -42,15 +48,19 @@ export class Physics {
       entity.setEulerAngles(0, angleDeg, 0);
       entity.enabled = true;
 
+      // Update point light position
+      const light = this.playerLights.get(p.id);
+      if (light) {
+        light.setPosition(p.x, p.y + 0.8, p.z);
+      }
+
       const indicator = this.indicatorEntities.get(p.id);
       if (indicator) {
         indicator.enabled = true;
         const indMat = indicator.render.material;
-        if (indMat.emissiveIntensity === undefined) {
-          indMat.emissive = new Color(0.0, 1.0, 0.3);
-          indMat.emissiveIntensity = 0.8;
-          indMat.update();
-        }
+        indMat.emissive = new Color(0.0, 1.0, 0.4);
+        indMat.emissiveIntensity = 1.5;
+        indMat.update();
       }
     }
   }
@@ -89,20 +99,36 @@ export class Physics {
     }
   }
 
-  createGlowingPlayer(id, color, emissiveColor) {
+  createGlowingPlayer(id, color, emissiveColor, lightColor) {
     const entity = new Entity('player' + id);
     entity.addComponent('render', { type: 'box' });
     const material = new StandardMaterial();
     material.diffuse = color;
     material.emissive = emissiveColor;
-    material.emissiveIntensity = 0.8;
-    material.roughness = 0.3;
-    material.metalness = 0.7;
+    material.emissiveIntensity = 1.5;
+    material.roughness = 0.2;
+    material.metalness = 0.8;
     material.castShadows = true;
     material.receiveShadows = true;
     material.update();
     entity.render.material = material;
     entity.setLocalScale(0.5, 0.5, 0.5);
+
+    // Outer glow layer (slightly larger, brighter)
+    const glow = new Entity('glow' + id);
+    const glowRender = glow.addComponent('render', { type: 'box' });
+    const glowMat = new StandardMaterial();
+    glowMat.diffuse = emissiveColor;
+    glowMat.emissive = emissiveColor;
+    glowMat.emissiveIntensity = 3.0;
+    glowMat.opacity = 0.6;
+    glowMat.blendType = 2;
+    glowMat.alphaWrite = false;
+    glowMat.update();
+    glowRender.material = glowMat;
+    glow.setLocalScale(0.65, 0.65, 0.65);
+
+    entity.addChild(glow);
 
     // Inner bright edge (wireframe-like overlay)
     const edges = new Entity('edges' + id);
@@ -110,20 +136,20 @@ export class Physics {
     const edgeMat = new StandardMaterial();
     edgeMat.diffuse = emissiveColor;
     edgeMat.emissive = emissiveColor;
-    edgeMat.emissiveIntensity = 1.0;
+    edgeMat.emissiveIntensity = 2.0;
     edgeMat.update();
     edgeRender.material = edgeMat;
     edges.setLocalScale(0.52, 0.52, 0.52);
 
     entity.addChild(edges);
 
-    // Green forward indicator (glowing)
+    // Green forward indicator (bright glowing)
     const indicator = new Entity('indicator' + id);
     indicator.addComponent('render', { type: 'box' });
     const indMat = new StandardMaterial();
     indMat.diffuse = new Color(0.0, 1.0, 0.3);
-    indMat.emissive = new Color(0.0, 0.8, 0.2);
-    indMat.emissiveIntensity = 0.8;
+    indMat.emissive = new Color(0.0, 1.0, 0.4);
+    indMat.emissiveIntensity = 1.5;
     indMat.update();
     indicator.render.material = indMat;
     indicator.setLocalScale(1.1, 1.1, 0.2);
@@ -131,9 +157,23 @@ export class Physics {
     indicator.enabled = false;
 
     entity.addChild(indicator);
+
+    // Real point light that illuminates the floor
+    const lightEntity = new Entity('pointLight' + id);
+    lightEntity.addComponent('light', {
+      type: 'point',
+      color: lightColor,
+      intensity: 3.0,
+      range: 6,
+      shadow: false
+    });
+    lightEntity.setPosition(0, 0.8, 0);
+    entity.addChild(lightEntity);
+
     this.app.root.addChild(entity);
     this.playerEntities.set(id, entity);
     this.indicatorEntities.set(id, indicator);
+    this.playerLights.set(id, lightEntity);
     return entity;
   }
 
@@ -169,6 +209,7 @@ export class Physics {
     }
     this.playerEntities.clear();
     this.indicatorEntities.clear();
+    this.playerLights.clear();
     for (const [id] of this.projectileEntities) {
       this.destroyProjectile(id);
     }
