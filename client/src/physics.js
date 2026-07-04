@@ -71,10 +71,11 @@ export class Physics {
     for (const proj of projectives) {
       let data = this.projectileEntities.get(proj.id);
       if (!data) {
-        const { entity, lightEntity } = this.createGlowingProjectile(proj.id);
+        const { entity, lightEntity, lightComp } = this.createGlowingProjectile(proj.id);
         data = {
           entity,
           lightEntity,
+          lightComp,
           spawnTime: proj.spawnTick * DT,
           startX: proj.startX,
           startY: proj.y,
@@ -205,7 +206,7 @@ export class Physics {
     entity.addChild(lightEntity);
 
     this.app.root.addChild(entity);
-    return { entity, lightEntity };
+    return { entity, lightEntity, lightComp: lightEntity.light };
   }
 
   destroyProjectile(id) {
@@ -240,8 +241,11 @@ export class Physics {
       const py = data.startY;
       const pz = data.startZ + data.dirZ * elapsed * data.speed;
       data.entity.setPosition(px, py, pz);
-      if (data.lightEntity) {
+      if (data.lightComp) {
         data.lightEntity.setPosition(px, py + 0.15, pz);
+        const pulse = Math.sin(this.simTime * 20) * 0.5 + 0.5;
+        data.lightComp.range = 0.4 + pulse * 0.6;
+        data.lightComp.intensity = 2 + pulse * 6;
       }
     }
   }
