@@ -18,7 +18,7 @@ import { CooldownHUD } from './hud.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
-const COOLDOWN_MAX = 4;
+const COOLDOWN_MAX = 3;
 
 export class Game {
   constructor() {
