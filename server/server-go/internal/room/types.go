@@ -149,6 +149,11 @@ func (p *Player) ProcessInputs(dt float32) {
 		}
 	}
 
+	// Check for projectile activation (flags & 0x01)
+	if last.Flags&0x01 != 0 && p.Cooldown <= 0 {
+		p.JustFired = true
+	}
+
 	// Clear buffer
 	p.BufferedInputs = nil
 }

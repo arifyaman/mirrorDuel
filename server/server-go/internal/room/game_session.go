@@ -65,27 +65,24 @@ func (s *GameSession) TickStep() {
 		cfg := s.Config.Projectile
 		player.Cooldown = cfg.Cooldown
 
-		dx := player.AimX - player.X
-		dz := player.AimZ - player.Z
-		if dx*dx+dz*dz >= 0.0001 {
-			length := float32(math.Sqrt(float64(dx*dx + dz*dz)))
-			dirX := dx / length
-			dirZ := dz / length
-			spawnX := player.X + dirX*0.3
-			spawnZ := player.Z + dirZ*0.3
-			s.Projectiles = append(s.Projectiles, Projectile{
-				ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
-				StartX:      spawnX,
-				Y:           player.Y,
-				StartZ:      spawnZ,
-				DirX:        dirX,
-				DirZ:        dirZ,
-				Speed:       cfg.Speed,
-				MaxReach:    cfg.MaxReach,
-				SpawnTick:   s.tick,
-				PlayerOwner: player.ID,
-			})
-		}
+		// Direction from player's facing angle (source of truth), not mouse aim
+		angle := float64(player.Angle)
+		dirX := float32(math.Sin(angle))
+		dirZ := float32(math.Cos(angle))
+		spawnX := player.X + dirX*0.3
+		spawnZ := player.Z + dirZ*0.3
+		s.Projectiles = append(s.Projectiles, Projectile{
+			ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
+			StartX:      spawnX,
+			Y:           player.Y,
+			StartZ:      spawnZ,
+			DirX:        dirX,
+			DirZ:        dirZ,
+			Speed:       cfg.Speed,
+			MaxReach:    cfg.MaxReach,
+			SpawnTick:   s.tick,
+			PlayerOwner: player.ID,
+		})
 	}
 
 	// Update projectiles (client simulates position from spawn data)

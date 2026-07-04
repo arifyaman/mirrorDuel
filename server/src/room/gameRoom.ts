@@ -91,13 +91,9 @@ export class GameSession {
     const config = this.config.skills.projectile;
     player.cooldown = config.cooldown;
 
-    const dx = mouseX - player.x;
-    const dz = mouseY - player.z;
-    const len = Math.sqrt(dx * dx + dz * dz);
-    if (len < 0.01) return;
-
-    const dirX = dx / len;
-    const dirZ = dz / len;
+    // Direction from player's facing angle (source of truth), not mouse aim
+    const dirX = Math.sin(player.angle);
+    const dirZ = Math.cos(player.angle);
 
    player._justFired = true;
 
@@ -132,7 +128,7 @@ export class Player {
  cooldown: number;
   _justFired: boolean = false;
   private readonly config: GameConfig;
-  private bufferedInputs: Array<{ moveX: number; moveZ: number; mouseX: number; mouseZ: number; flags: number }> = [];
+  private bufferedInputs: Array<{ moveX: number; moveZ: number; mouseX: number; mouseY: number; flags: number }> = [];
   _session: GameSession | null = null;
 
   constructor(id: number, name: string, x: number, y: number, angle: number, config: GameConfig) {
@@ -148,7 +144,7 @@ export class Player {
     this.cooldown = 0;
   }
 
-  queueInput(input: { moveX: number; moveZ: number; mouseX: number; mouseZ: number; flags: number; tick: number }) {
+  queueInput(input: { moveX: number; moveZ: number; mouseX: number; mouseY: number; flags: number; tick: number }) {
     this.bufferedInputs.push(input);
   }
 
@@ -204,7 +200,7 @@ export class Player {
 
     // Handle projectile activation (flags & 0x01)
     if (lastInput.flags & 0x01) {
-      this._session?.activateProjectile(this, lastInput.mouseX, lastInput.mouseZ);
+      this._session?.activateProjectile(this, lastInput.mouseX, lastInput.mouseY);
     }
 
     if (this.cooldown > 0) {

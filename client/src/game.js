@@ -98,7 +98,7 @@ export class Game {
     }
     const moveX = (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
     const moveZ = (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
-    const flags = this.input.mouseDown ? 0x01 : 0;
+    const flags = this.input.fire ? 0x01 : 0;
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
   }
 }

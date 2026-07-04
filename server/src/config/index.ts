@@ -23,7 +23,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   speedStrafeFactor: 0.75,
   skills: {
     projectile: {
-      cooldown: 4,
+      cooldown: 0.2,
       projectileSpeed: 7.5,
       maxReach: 4,
       maxBurstParticles: 18,

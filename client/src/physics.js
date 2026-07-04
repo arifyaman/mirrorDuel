@@ -85,6 +85,7 @@ export class Physics {
         };
         this.projectileEntities.set(proj.id, data);
       }
+      data.entity.setPosition(data.startX, data.startY, data.startZ);
       data.entity.enabled = true;
     }
 

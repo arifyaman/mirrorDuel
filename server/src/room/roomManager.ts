@@ -56,16 +56,6 @@ export class RoomManager {
     if (!player) return;
 
     player.queueInput(input);
-
-    // Skill activation
-    if ((input.flags & 0x01) !== 0) {
-      for (const room of this.rooms) {
-        if (room.players.has(player.id)) {
-          room.activateProjectile(player, input.mouseX, input.mouseY);
-          break;
-        }
-      }
-    }
   }
 
   join(session: Session, playerName: string) {
