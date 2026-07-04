@@ -91,12 +91,22 @@ type JoinResult struct {
 }
 
 func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult {
-	// Find a room with < 2 players
+	// Priority 1: Find a room with exactly 1 player waiting for a duel
 	var room *GameSession
 	for _, r := range m.Rooms {
-		if len(r.Players) < 2 {
+		if len(r.Players) == 1 {
 			room = r
 			break
+		}
+	}
+
+	// Priority 2: Find any room with < 2 players
+	if room == nil {
+		for _, r := range m.Rooms {
+			if len(r.Players) < 2 {
+				room = r
+				break
+			}
 		}
 	}
 
@@ -204,14 +214,7 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 		delete(room.Players, playerID)
 
-		// Notify remaining players they've been kicked
-		for _, p := range room.Players {
-			if p.Session != nil {
-				p.Session.SendDisconnect()
-			}
-		}
-
-		// Remove empty rooms immediately
+		// Only notify remaining players if room is empty (no one left to rematch)
 		if len(room.Players) == 0 {
 			fmt.Printf("[Room] Empty room %d removed\n", room.RoomID)
 			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
@@ -227,11 +230,7 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 		room.mu.Unlock()
 
-		if m.Callbacks.OnSessionDisconnect != nil {
-			m.Callbacks.OnSessionDisconnect(session)
-		}
-
-		fmt.Printf("[Room] Player %d disconnected, room %d now has %d player(s)\n", playerID, room.RoomID, len(room.Players))
+		fmt.Printf("[Room] Player %d disconnected, room %d now has %d player(s) waiting\n", playerID, room.RoomID, len(room.Players))
 		return
 	}
 }
