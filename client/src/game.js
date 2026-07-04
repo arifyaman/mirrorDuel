@@ -48,6 +48,8 @@ export class Game {
     this.input.init();
     this.myCooldown = 0;
     this._prevMyCooldown = 0;
+    this._dashCooldown = 0;
+    this._shieldCooldown = 0;
     this.gameTitle = new GameTitle();
   }
 
@@ -104,10 +106,29 @@ export class Game {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
     if (this.gameTitle) this.gameTitle.update();
-    if (this.hud) this.hud.update();
-    const moveX = (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
-    const moveZ = (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
-    const flags = this.input.fire ? 0x01 : 0;
-    this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
+
+    // Decrement local cooldowns
+    if (this._dashCooldown > 0) this._dashCooldown = Math.max(0, this._dashCooldown - dt);
+    if (this._shieldCooldown > 0) this._shieldCooldown = Math.max(0, this._shieldCooldown - dt);
+
+    // Trigger dash cooldown on key press
+    if (this.input.dash && this._dashCooldown <= 0) {
+      this._dashCooldown = 2;
+      this.input.dash = false;
+    }
+
+    // Trigger shield cooldown on key press
+    if (this.input.shield && this._shieldCooldown <= 0) {
+      this._shieldCooldown = 5;
+      this.input.shield = false;
+    }
+
+    // Update HUD with all 3 cooldowns
+    if (this.hud) {
+      this.hud.setCooldown('dash', this._dashCooldown);
+      this.hud.setCooldown('projectile', this.myCooldown);
+      this.hud.setCooldown('shield', this._shieldCooldown);
+      this.hud.update(dt);
+    }
   }
 }
