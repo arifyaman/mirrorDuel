@@ -3,6 +3,7 @@ import { Color, Entity, StandardMaterial, Vec3, CameraFrame, TONEMAP_ACES } from
 export class Scene {
   constructor(app) {
     this.app = app;
+    this.cameraNode = null;
     this.cameraComponent = null;
     this.createFloor();
     this.createCamera();
@@ -28,6 +29,7 @@ export class Scene {
     this.cameraComponent = camera.addComponent('camera', {
       clearColor: new Color(0.1, 0.2, 0.3)
     });
+    this.cameraNode = camera;
     this.app.root.addChild(camera);
     camera.setPosition(0, 10, 10);
     camera.lookAt(new Vec3(0, 0, 0));
@@ -52,11 +54,14 @@ export class Scene {
   }
 
   setupPostProcessing() {
-    const cameraFrame = new CameraFrame(this.app, this.cameraComponent.camera);
-    cameraFrame.rendering.toneMapping = TONEMAP_ACES;
-    cameraFrame.bloom.intensity = 0.02;
-    cameraFrame.taa.enabled = true;
-    cameraFrame.taa.jitter = 1;
-    cameraFrame.update();
+  }
+
+  applyPostProcessing() {
+    this.cameraFrame = new CameraFrame(this.app, this.cameraComponent);
+    this.cameraFrame.rendering.toneMapping = TONEMAP_ACES;
+    this.cameraFrame.bloom.intensity = 0.02;
+    this.cameraFrame.taa.enabled = true;
+    this.cameraFrame.taa.jitter = 1;
+    this.cameraFrame.update();
   }
 }

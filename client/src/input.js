@@ -8,7 +8,6 @@ export class Input {
     this.mouseDown = false;
     this._rayOrigin = new Vec3();
     this._rayDir = new Vec3();
-    this._intersection = new Vec3();
     this._cam = null;
     this._canvas = canvas;
   }
@@ -28,28 +27,29 @@ export class Input {
 
   onMouseMove(e) {
     const rect = this._canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const screenX = (e.clientX - rect.left) * dpr;
+    const screenY = (e.clientY - rect.top) * dpr;
+    const canvasW = this._canvas.width;
+    const canvasH = this._canvas.height;
+
     const cam = this._cam;
     if (!cam) return;
 
     const from = this._rayOrigin;
     const to = this._rayDir;
-    cam.screenToWorld(
-      e.clientX - rect.left, e.clientY - rect.top,
-      cam.nearClip, rect.width, rect.height, from
-    );
-    cam.screenToWorld(
-      e.clientX - rect.left, e.clientY - rect.top,
-      cam.farClip, rect.width, rect.height, to
-    );
+    cam.screenToWorld(screenX, screenY, cam.nearClip, canvasW, canvasH, from);
+    cam.screenToWorld(screenX, screenY, cam.farClip, canvasW, canvasH, to);
 
-    this._rayDir.sub(to, from).normalize();
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dz = to.z - from.z;
 
     const planeY = -0.5;
-    if (Math.abs(this._rayDir.y) > 0.001) {
-      const t = (planeY - this._rayOrigin.y) / this._rayDir.y;
-      this._intersection.copy(this._rayOrigin).addScaled(this._rayDir, t);
-      this.mouseX = this._intersection.x;
-      this.mouseY = this._intersection.z;
+    if (Math.abs(dy) > 0.001) {
+      const t = (planeY - from.y) / dy;
+      this.mouseX = from.x + dx * t;
+      this.mouseY = from.z + dz * t;
     }
   }
 }

@@ -144,5 +144,3 @@ func (p *Player) ProcessInputs(dt float32) {
 	// Clear buffer
 	p.BufferedInputs = nil
 }
-
-

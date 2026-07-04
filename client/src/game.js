@@ -41,11 +41,12 @@ export class Game {
     this.input = new Input(this.canvas, this.network);
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
-    this.hud = new CooldownHUD(COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
     this.myCooldown = 0;
+    this._hudCreated = false;
   }
 
   start() {
+    this.app.on('start', () => this._onAppStarted());
     this.networkClient.connect();
     this.networkClient.onStatus(state => this.onStatus(state));
     this.networkClient.onDisconnect(() => this.network.onDisconnect());
@@ -54,6 +55,14 @@ export class Game {
 
     this.app.on('update', (dt) => this.update(dt));
     this.app.start();
+  }
+
+  _onAppStarted() {
+    if (!this._hudCreated) {
+      this.hud = new CooldownHUD(COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+      this.scene.applyPostProcessing();
+      this._hudCreated = true;
+    }
   }
 
   onStatus(state) {
@@ -84,7 +93,9 @@ export class Game {
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);
     }
-    this.hud.update(this.myCooldown, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+    if (this.hud) {
+      this.hud.update(this.myCooldown, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+    }
     const moveX = (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
     const moveZ = (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
     const flags = this.input.mouseDown ? 0x01 : 0;
