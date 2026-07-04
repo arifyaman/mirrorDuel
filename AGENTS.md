@@ -40,31 +40,21 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Node.js
 ```
 mirrorDuel/
 ├── .gitignore
-├── tsconfig.base.json              # Shared TypeScript config
 ├── client/                         # PlayCanvas game client
 │   ├── index.html                  # Entry point: scene setup, game loop, network
 │   ├── package.json                # playcanvas 2.20.3, vite 8.1.1
-│   ├── vite.config.js              # Vite config with WebSocket proxy
+│   ├── vite.config.js              # Vite config with WebTransport proxy
 │   └── src/
 │       ├── network/
-│       │   ├── client.js           # WebSocket client, input queue, reconnect logic
+│       │   ├── webtransport.js     # WebTransport client, input queue, reconnect logic
 │       │   └── protocol.js         # Binary encode/decode for client↔server
 │       └── config.yaml             # Client-side skill configuration
-└── server/                         # Node.js game server
-    ├── tsconfig.json               # TypeScript config
-    ├── package.json                # ws, tsx, typescript
-    └── src/
-        ├── server.ts               # Entry: WebSocket server, HTTP health check, game loop
-        ├── room/
-        │   ├── gameRoom.ts         # GameSession, Player, projectile logic, 60Hz tick
-        │   └── roomManager.ts      # 1v1 matchmaking, input handling, state broadcast
-        ├── network/
-        │   ├── session.ts          # Per-player session, message dispatch
-        │   └── protocol.ts         # Binary encode/decode (server-side)
-        ├── config/
-        │   └── index.ts            # GameConfig interface + defaults
-        └── shared/
-            └── protocol.ts         # Shared TypeScript types (PlayerInput, StateSnapshot, etc.)
+└── server/
+    └── server-go/                  # Go WebTransport/QUIC game server
+        ├── cmd/server/             # Entry: WebTransport server, HTTP health check, game loop
+        ├── internal/room/          # GameSession, Player, projectile logic, matchmaking
+        ├── internal/network/       # Session, binary protocol encode/decode
+        └── internal/config/        # Server configuration defaults
 ```
 
 ## Client Architecture
@@ -76,8 +66,8 @@ mirrorDuel/
 - **Game Loop**: Sends inputs to server via network client
 - **Rendering**: Receives server snapshots, creates/updates player entities
 
-### `src/network/client.js`
-- **WebSocket Client**: Connects to server, sends JOIN_ROOM on connect
+### `src/network/webtransport.js`
+- **WebTransport Client**: Connects to server via QUIC, sends JOIN_ROOM on connect
 - **Input Queue**: Batches frames, sends every 16ms
 - **Auto-reconnect**: 2-second retry on disconnect
 - **Message Handlers**: STATE_SNAPSHOT, ROOM_CREATED, DISCONNECT
@@ -101,27 +91,27 @@ mirrorDuel/
 - **Game Loop**: 60Hz (16.67ms), processes inputs + updates rooms
 - **Session Management**: UUID-based session IDs, disconnect cleanup
 
-### `room/gameRoom.ts`
+### `internal/room/game_session.go`
 - **GameSession**: Manages 1v1 room, tick loop, projectile state
 - **Player**: Buffered inputs, movement (camera-relative + speed modulation), angle (from mouse), cooldown
-- **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - Math.exp(-8 * dt)`
+- **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
-- **Projectile**: Created on click, tracked by `traveled` distance, removed when reaching maxReach
+- **Projectile**: Created on R key, tracked by `traveled` distance, removed when reaching maxReach
 
-### `room/roomManager.ts`
+### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
 - **Input Processing**: Queues inputs, triggers skill activation
 - **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room
 - **Disconnect**: Cleans up room, notifies opponent
 
-### `network/protocol.ts`
-- **Encoding**: `encodeStateSnapshot()` - 47 bytes per player, 33 bytes per projectile
+### `internal/network/protocol.go`
+- **Encoding**: `encodeStateSnapshot()` - 21 bytes per player, 31 bytes per projectile
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
 - **Message Parsing**: First byte = message type, rest = payload
 
-### `config/index.ts`
-- **GameConfig**: floorSize(10), playerSpeed(5), lerpFactor(8), speedStrafeFactor(0.75)
-- **Skills**: cooldown(0.2), projectileSpeed(7.5), maxReach(4), maxBurstParticles(18), burstSpeed(8), burstDuration(1.5)
+### `internal/config/config.go`
+- **Config**: FloorSize(10), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75)
+- **Projectile**: Cooldown(3), Speed(7.5), MaxReach(4), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 
 ## Network Protocol
 
@@ -149,19 +139,18 @@ mirrorDuel/
 
 ## Development Workflow
 
-### Run Server
+### Run Server (Go + WebTransport/QUIC)
 ```bash
-cd server && npx tsx src/server.ts
+cd server/server-go && go build -o main ./cmd/server/ && ./main
 ```
-- WebSocket: `ws://localhost:5173/ws`
-- Health: `http://localhost:5172`
+- WebTransport: `https://localhost:4433/wt`
+- Health: `http://localhost:8081/health`
 
 ### Run Client
 ```bash
 cd client && npm run dev
 ```
 - Browser: `http://localhost:5174`
-- Vite proxies `/ws` to server automatically
 
 ### Test 1v1
 1. Start server
