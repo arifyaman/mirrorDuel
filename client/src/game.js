@@ -14,10 +14,12 @@ import { Scene } from './scene.js';
 import { Network } from './network.js';
 import { Physics } from './physics.js';
 import { Input } from './input.js';
-import { SkillsHUD } from './skills-hud.js';
+import { CooldownHUD } from './hud.js';
 import { GameTitle } from './game-title.js';
 
 const DT = 0.01667;
+const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
+const COOLDOWN_MAX = 3;
 
 export class Game {
   constructor() {
@@ -48,8 +50,7 @@ export class Game {
     this.input.init();
     this.myCooldown = 0;
     this._prevMyCooldown = 0;
-    this._dashCooldown = 0;
-    this._shieldCooldown = 0;
+    this._hudCreated = false;
     this.gameTitle = new GameTitle();
   }
 
@@ -68,8 +69,11 @@ export class Game {
   }
 
   _onAppStarted() {
-    this.hud = new SkillsHUD();
-    this.scene.applyPostProcessing();
+    if (!this._hudCreated) {
+      this.hud = new CooldownHUD(COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+      this.scene.applyPostProcessing();
+      this._hudCreated = true;
+    }
   }
 
   onStatus(state) {
@@ -99,36 +103,22 @@ export class Game {
 
   recreateHUD() {
     if (this.hud) this.hud.destroy();
-    this.hud = new SkillsHUD();
+    this.hud = new CooldownHUD(COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
   }
 
   update(dt) {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
     if (this.gameTitle) this.gameTitle.update();
-
-    // Decrement local cooldowns
-    if (this._dashCooldown > 0) this._dashCooldown = Math.max(0, this._dashCooldown - dt);
-    if (this._shieldCooldown > 0) this._shieldCooldown = Math.max(0, this._shieldCooldown - dt);
-
-    // Trigger dash cooldown on key press
-    if (this.input.dash && this._dashCooldown <= 0) {
-      this._dashCooldown = 2;
-      this.input.dash = false;
+    if (this.myCooldown > 0) {
+      this.myCooldown = Math.max(0, this.myCooldown - dt);
     }
-
-    // Trigger shield cooldown on key press
-    if (this.input.shield && this._shieldCooldown <= 0) {
-      this._shieldCooldown = 5;
-      this.input.shield = false;
-    }
-
-    // Update HUD with all 3 cooldowns
     if (this.hud) {
-      this.hud.setCooldown('dash', this._dashCooldown);
-      this.hud.setCooldown('projectile', this.myCooldown);
-      this.hud.setCooldown('shield', this._shieldCooldown);
-      this.hud.update(dt);
+      this.hud.update([this.myCooldown, 0, 0]);
     }
+    const moveX = (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
+    const moveZ = (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
+    const flags = this.input.fire ? 0x01 : 0;
+    this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
   }
 }
