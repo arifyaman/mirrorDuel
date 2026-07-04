@@ -1,7 +1,7 @@
 # mirrorDuel - Game Mechanics & Technical Documentation
 
 ## Overview
-A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Node.js WebSocket server. Players move around a floor plane with camera-relative movement and skill-based projectile attacks.
+A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebTransport/QUIC server. Players move around a 20x20 arena with camera-relative movement and skill-based projectile attacks.
 
 ## Game Mechanics
 
@@ -18,22 +18,33 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Node.js
 
 ### Projectile Skill
 - **Activation**: Left mouse click
-- **Cooldown**: 0.2 seconds
+- **Cooldown**: 3 seconds
 - **Projectile Properties**:
-  - Travel distance: 4 units
-  - Speed: 7.5 units/sec
-  - Travel time: ~0.53 seconds
+  - Travel distance: 8 units
+  - Speed: 13.5 units/sec
+  - Travel time: ~0.59 seconds
 - **Direction**: Towards mouse cursor position on ground plane (y=-0.5)
 
+### HUD
+- **3 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
+  - Fire (Skill 1): Crosshair icon, red ring, 3s cooldown
+  - Dash (Skill 2): Lightning bolt icon, gold ring, placeholder
+  - Shield (Skill 3): Shield icon with cross, blue ring, placeholder
+- **Cooldown Display**: Animated ring, text shows time remaining or "READY" when available
+
 ### Scene Elements
-- **Floor**: Gray box (10x0.1x10) at y=-0.5, diffuse color (0.75, 0.75, 0.75)
+- **Floor**: Gray box (20x0.05x20) at y=-0.5, diffuse color (0.12, 0.12, 0.18)
+- **Grid**: Green grid lines at each integer position within bounds
 - **Player**: Red/Blue box (0.5 scale) at y=-0.20
 - **Forward Indicator**: Green strip on player showing forward direction
+- **Boundary Walls**: Semi-transparent red walls at arena edges
 - **Lighting**:
-  - Directional light (sun): warm white (1, 0.95, 0.8), intensity 2, soft shadows
-  - Shadows: 2048 resolution, 20 unit distance, normal offset bias 0.02
-- **Camera**: Static position (0, 10, 10), looking at origin
-- **Background**: Clear color (0.1, 0.2, 0.3) - dark blue
+  - Directional light (sun): white (0.9, 0.9, 1.0), intensity 2.5, 2048 shadow resolution, 30 unit distance
+  - Point lights per player and projectile for glow effects
+  - Ambient fill + TAA with bloom (intensity 0.1)
+- **Camera**: Follows player midpoint (2+ players) or single player with 0.4 lerp factor
+  - Dynamic zoom: pulls back when players are >10 units apart
+  - LookAt fixed at origin, camera offset `{x:0, y:10, z:16}` with scaled distance
 
 ## Project Structure
 
@@ -46,31 +57,38 @@ mirrorDuel/
 │   ├── vite.config.js              # Vite config with WebTransport proxy
 │   └── src/
 │       ├── network/
-│       │   ├── webtransport.js     # WebTransport client, input queue, reconnect logic
+│       │   ├── webtransport.js     # WebTransport client, input queue, length-prefixed framing
 │       │   └── protocol.js         # Binary encode/decode for client↔server
-│       └── config.yaml             # Client-side skill configuration
+│       ├── scene.js                # Floor, camera, lights, walls, post-processing
+│       ├── physics.js              # Player/projectile entity creation and rendering
+│       ├── input.js                # WASD keys, mouse tracking, raycasting
+│       ├── game.js                 # Main game loop, network callbacks, camera follow logic
+│       ├── network.js              # Network session tracking
+│       ├── hud.js                  # 3-skill cooldown HUD with SVG icons and triangle layout
+│       └── game-title.js           # Title screen animation
 └── server/
     └── server-go/                  # Go WebTransport/QUIC game server
         ├── cmd/server/             # Entry: WebTransport server, HTTP health check, game loop
         ├── internal/room/          # GameSession, Player, projectile logic, matchmaking
-        ├── internal/network/       # Session, binary protocol encode/decode
-        └── internal/config/        # Server configuration defaults
+        ├── internal/network/       # Session, length-prefixed binary protocol encode/decode
+        └── internal/config/        # Server configuration (FloorSize:20, Speed:13.5, MaxReach:8)
 ```
 
 ## Client Architecture
 
 ### `index.html`
-- **Scene**: Floor, camera, directional light, TAA with bloom
-- **Render Pipeline**: TAA (jitter=1), ACES tone mapping, subtle bloom (0.02)
+- **Scene**: Floor with grid, camera, directional light, TAA with bloom
+- **Render Pipeline**: TAA (jitter=1), ACES tone mapping, bloom (0.1)
 - **Input**: Key tracking (WASD), mouse raycasting to ground plane
-- **Game Loop**: Sends inputs to server via network client
-- **Rendering**: Receives server snapshots, creates/updates player entities
+- **Game Loop**: Sends inputs to server, receives snapshots, updates HUD
+- **Rendering**: Receives server snapshots, creates/updates player and projectile entities
 
 ### `src/network/webtransport.js`
-- **WebTransport Client**: Connects to server via QUIC, sends JOIN_ROOM on connect
+- **WebTransport Client**: Connects via QUIC, sends JOIN_ROOM on connect
+- **Length-Prefixed Framing**: `[length: u32 LE][msgType: u8][payload]`
+- **Read Buffer**: Accumulates data across reads, parses complete messages (handles coalesced/partial reads)
 - **Input Queue**: Batches frames, sends every 16ms
 - **Auto-reconnect**: 2-second retry on disconnect
-- **Message Handlers**: STATE_SNAPSHOT, ROOM_CREATED, DISCONNECT
 
 ### `src/network/protocol.js`
 - **Binary Encoding**: `encodePlayerInput()` - 13 bytes (tick:2, moveX:1, moveZ:1, mouseX:4, mouseY:4, flags:1)
@@ -78,25 +96,25 @@ mirrorDuel/
 - **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), DISCONNECT(255)
 
 ### Entity System
-- **Player Entities**: Created dynamically when server sends player IDs
+- **Player Entities**: Created dynamically from server state
 - **Red/Blue**: Player 1 = red, Player 2 = blue
 - **Indicator**: Green strip showing forward direction (opponent only)
-- **Cleanup**: Destroyed on disconnect
+- **Projectile Entities**: Spawn at start position, compute position from tick delta
 
 ## Server Architecture
 
-### `server.ts`
-- **WebSocket Server**: Port 5173, path `/ws`
-- **HTTP Server**: Port 5172, health check endpoint `{"status":"ok","players":N}`
+### `cmd/server/main.go`
+- **WebTransport Server**: Port 4433 (QUIC), path `/wt`
+- **HTTP Server**: Port 8081, health check `{"status":"ok","players":N}`
 - **Game Loop**: 60Hz (16.67ms), processes inputs + updates rooms
-- **Session Management**: UUID-based session IDs, disconnect cleanup
+- **TLS**: Self-signed certificate from `tls/localhost.pem`
 
 ### `internal/room/game_session.go`
 - **GameSession**: Manages 1v1 room, tick loop, projectile state
 - **Player**: Buffered inputs, movement (camera-relative + speed modulation), angle (from mouse), cooldown
 - **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
-- **Projectile**: Created on R key, tracked by `traveled` distance, removed when reaching maxReach
+- **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
 
 ### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
@@ -105,20 +123,28 @@ mirrorDuel/
 - **Disconnect**: Cleans up room, notifies opponent
 
 ### `internal/network/protocol.go`
+- **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
 - **Encoding**: `encodeStateSnapshot()` - 21 bytes per player, 31 bytes per projectile
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
-- **Message Parsing**: First byte = message type, rest = payload
+- **Read Loop**: Handles multiple coalesced messages per read
+
+### `internal/network/session.go`
+- **Session**: Wraps WebTransport stream, manages connection state
+- **SendMsg**: Length-prefixed write to QUIC stream
+- **Read Loop**: Accumulates data, parses messages in loop
 
 ### `internal/config/config.go`
-- **Config**: FloorSize(10), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75)
-- **Projectile**: Cooldown(3), Speed(7.5), MaxReach(4), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
+- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75)
+- **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 
 ## Network Protocol
 
-### Message Format
+### Length-Prefixed Frame Format
 ```
-[messageType: 1 byte][payload: variable bytes]
+[length: u32 LE][msgType: u8][payload: variable bytes]
 ```
+- `length` covers msgType byte + payload (1 + payload size)
+- Handles QUIC stream coalescing and partial reads
 
 ### Client → Server
 | Type | Name | Size | Format |
@@ -135,7 +161,7 @@ mirrorDuel/
 
 ### StateSnapshot Details
 - **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32]` (21 bytes)
-- **Projectile**: `[id: u8][x: f32][y: f32][z: f32][traveled: f32][dirX: f32][dirZ: f32]` (27 bytes)
+- **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
 
 ## Development Workflow
 
@@ -156,15 +182,21 @@ cd client && npm run dev
 1. Start server
 2. Open two browser windows at `http://localhost:5174`
 3. First player connects, second player joins automatically
-4. Both players see each other move
+4. Both players see each other move and fight
 
 ## Technical Notes
+
+### Camera System
+- Follows player midpoint when 2+ players, otherwise tracks single player
+- Smooth lerp with `cameraFollowFactor = 0.4` (player moves 10 units → camera moves ~4 units)
+- Dynamic zoom: camera height/distance scale by `1 + max(0, dist - 10) * 0.08` when players >10 units apart
+- LookAt always fixed at origin (0, 0, 0)
 
 ### Movement System
 - Server tracks `targetX/Z` (immediate) and `x/Z` (smooth lerp)
 - Camera-relative: W = -Z, S = +Z, A = -X, D = +X (in world space)
 - Speed modulation based on player facing angle
-- Floor bounds clamping: ±5 units
+- Floor bounds clamping: ±10 units (FloorSize=20)
 
 ### Entity Management
 - Player entities created dynamically from server state
@@ -173,6 +205,7 @@ cd client && npm run dev
 - Shadow materials need `castShadows` and `receiveShadows` set
 
 ### Protocol Design
+- Length-prefixed framing handles QUIC stream coalescing and partial reads
 - Binary format for minimal bandwidth
 - Server-authoritative: client sends inputs, not positions
 - Latest input used (intermediate inputs discarded)
