@@ -1,12 +1,10 @@
 export class GameTitle {
   constructor() {
     this.container = null;
-    this.glowLayer = null;
     this.title = null;
     this.subtitle = null;
     this.mouseX = 0;
     this.mouseY = 0;
-    this.playerId = 0;
     this.createElements();
   }
 
@@ -26,36 +24,27 @@ export class GameTitle {
       will-change: transform;
     `;
 
-    // Glow layer (behind, blurred)
-    this.glowLayer = document.createElement('div');
-    this.glowLayer.style.cssText = `
-      font-family: 'Orbitron', 'Segoe UI', sans-serif;
-      font-size: 28px;
-      font-weight: 900;
-      letter-spacing: 8px;
-      text-transform: uppercase;
-      text-align: center;
-      color: rgba(255,50,0,0.5);
-      filter: blur(6px);
-      line-height: 1.2;
-    `;
-    this.glowLayer.textContent = 'MIRROR DUEL!';
-    this.glowLayer.style.opacity = '0.6';
-
-    // Main title (sharp, gradient clipped)
+    // Main title
     this.title = document.createElement('div');
     this.title.style.cssText = `
       font-family: 'Orbitron', 'Segoe UI', sans-serif;
       font-size: 28px;
       font-weight: 900;
+      color: #fff;
       text-transform: uppercase;
       letter-spacing: 8px;
+      text-shadow:
+        0 0 10px #f00,
+        0 0 20px #f44,
+        0 0 40px #f00,
+        0 0 80px rgba(255,0,0,0.4),
+        0 0 120px rgba(255,0,0,0.2);
       line-height: 1.2;
-      background: linear-gradient(180deg, #ffffff 0%, #ff6644 50%, #ff2200 100%);
+      background: linear-gradient(180deg, #fff 0%, #ff6644 50%, #ff2200 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      position: relative;
+      filter: drop-shadow(0 0 12px rgba(255,50,0,0.8));
     `;
     this.title.textContent = 'MIRROR DUEL!';
 
@@ -67,6 +56,9 @@ export class GameTitle {
       font-weight: bold;
       color: #ffaa44;
       letter-spacing: 2px;
+      text-shadow:
+        0 0 6px rgba(255,170,50,0.6),
+        0 0 12px rgba(255,100,0,0.3);
       text-transform: uppercase;
       opacity: 0.85;
       text-align: center;
@@ -75,7 +67,6 @@ export class GameTitle {
     `;
     this.subtitle.innerHTML = 'Using a spell gives 50% cooldown for your opponent!';
 
-    this.container.appendChild(this.glowLayer);
     this.container.appendChild(this.title);
     this.container.appendChild(this.subtitle);
     document.body.appendChild(this.container);
@@ -86,25 +77,8 @@ export class GameTitle {
     });
   }
 
-  setPlayerColor(playerId) {
-    this.playerId = playerId;
-    const isRed = playerId === 1;
-    const secondary = isRed ? '#ff4444' : '#4488ff';
-    const accent = isRed ? '#ff2200' : '#0044ff';
-    const glowColor = isRed ? '255,50,0' : '0,100,255';
-
-    // Title gradient
-    this.title.style.background = `linear-gradient(180deg, #ffffff 0%, ${secondary} 50%, ${accent} 100%)`;
-
-    // Glow layer color
-    this.glowLayer.style.color = `rgba(${glowColor},0.5)`;
-
-    // Subtitle color
-    this.subtitle.style.color = secondary;
-    this.subtitle.style.textShadow = `0 0 8px rgba(${glowColor},0.5), 0 0 16px rgba(${glowColor},0.3)`;
-  }
-
   update() {
+    // Mouse parallax offset
     const centerX = window.innerWidth / 2;
     const centerY = window.innerHeight / 2;
     const dx = (this.mouseX - centerX) / centerX;

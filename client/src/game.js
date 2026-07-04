@@ -60,7 +60,6 @@ export class Game {
     this.networkClient.onDisconnect(() => this.network.onDisconnect());
     this.networkClient.onJoin((roomId, myPlayerId) => {
       this.network.onJoin(myPlayerId);
-      if (this.gameTitle) this.gameTitle.setPlayerColor(myPlayerId);
     });
     this.networkClient.onSnap((tick, players, projectiles) => this.onSnap(tick, players, projectiles));
 
