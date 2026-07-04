@@ -20,7 +20,28 @@
             z-index: 200;
             text-align: center;
         }
- 
+        #cooldown-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 80px;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #cooldown-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -40%);
+            color: #fff;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1;
+        }
     </style>
     <script type="importmap">
 {
@@ -33,342 +54,9 @@
 <body>
     <div id="status">Disconnected</div>
     <script type="module">
-import {
-  Application,
-  Color,
-  Entity,
-  FILLMODE_FILL_WINDOW,
-  RESOLUTION_AUTO,
-  StandardMaterial,
-  Vec3,
-  CameraFrame,
-  TONEMAP_ACES
-} from 'playcanvas';
-import { NetworkClient } from './src/network/webtransport.js';
-import { decodeStateSnapshot } from './src/network/protocol.js';
-
-const canvas = document.createElement('canvas');
-canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
-document.body.appendChild(canvas);
-
-const app = new Application(canvas, {
-  graphicsDeviceOptions: {
-    antialias: false
-  }
-});
-
-app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
-app.setCanvasResolution(RESOLUTION_AUTO);
-
-window.addEventListener('resize', () => app.resizeCanvas());
-
-app.automaticallyManageScenes = false;
-
-const floor = new Entity('floor');
-const floorRender = floor.addComponent('render', { type: 'box' });
-floor.setLocalScale(10, 0.1, 10);
-floor.setPosition(0, -0.5, 0);
-
-const floorMaterial = new StandardMaterial();
-floorMaterial.diffuse = new Color(0.75, 0.75, 0.75);
-floorMaterial.receiveShadows = true;
-floorMaterial.update();
-floorRender.material = floorMaterial;
-
-app.root.addChild(floor);
-
-const camera = new Entity('camera');
-const cameraComponent = camera.addComponent('camera', {
-  clearColor: new Color(0.1, 0.2, 0.3)
-});
-app.root.addChild(camera);
-camera.setPosition(0, 10, 10);
-camera.lookAt(new Vec3(0, 0, 0));
-
-const directionalLight = new Entity('sun');
-directionalLight.addComponent('light', {
-  type: 'directional',
-  color: new Color(1, 0.95, 0.8),
-  intensity: 2,
-  castShadows: true,
-  shadowBias: 0.3,
-  normalOffsetBias: 0.02,
-  shadowResolution: 2048,
-  shadowDistance: 20,
-  shadowType: 'pc.SHADOW_SOFT'
-});
-app.root.addChild(directionalLight);
-directionalLight.setEulerAngles(45, -30, 0);
-directionalLight.setPosition(5, 15, 5);
-
-const cameraFrame = new CameraFrame(app, camera.camera);
-cameraFrame.rendering.toneMapping = TONEMAP_ACES;
-cameraFrame.bloom.intensity = 0.02;
-cameraFrame.taa.enabled = true;
-cameraFrame.taa.jitter = 1;
-cameraFrame.update();
-
-// ---- Network ----
-const network = new NetworkClient('localhost:4433');
-network.connect();
-
-const statusEl = document.getElementById('status');
-network.onStatus((state) => {
-  const labels = { disconnected: 'Disconnected', connecting: 'Connecting...', connected: 'Connected', reconnecting: 'Reconnecting...' };
-  statusEl.textContent = labels[state] || state;
-  statusEl.style.color = state === 'connected' ? '#0f0' : state === 'connecting' || state === 'reconnecting' ? '#ff0' : '#f00';
-});
-
-network.onDisconnect((reason) => {
-  cleanupPlayerEntities();
-  if (document.getElementById('cooldown-container')) document.getElementById('cooldown-container').remove();
-  createCooldownHUD();
-});
-
-network.onJoin((roomId, myPlayerId) => {
-  _myPlayerId = myPlayerId;
-});
-
-network.onSnap((tick, players, projectiles) => {
-  // Sync simulation time with server to prevent drift
-  const serverTime = tick * 0.01667;
-  simTime += (serverTime - simTime) * 0.1;
-  // Sync my own cooldown from server
-  const myPlayer = players.find(p => p.id === _myPlayerId);
-  if (myPlayer) {
-    _myCooldown = Math.max(0, myPlayer.cooldown);
-  }
-  applySnapshot(tick, players, projectiles);
-});
-
-// ---- Player entities ----
-const playerEntities = new Map();
-const playerMaterials = new Map();
-const indicatorEntities = new Map();
-const projectileEntities = new Map();
-let simTime = 0;
-
-function createPlayerEntity(id, color, indicatorColor) {
-  const entity = new Entity('player' + id);
-  entity.addComponent('render', { type: 'box' });
-
-  const material = new StandardMaterial();
-  material.diffuse = color;
-  material.castShadows = true;
-  material.receiveShadows = true;
-  material.update();
-  entity.render.material = material;
-  entity.setLocalScale(0.5, 0.5, 0.5);
-
-  const indicator = new Entity('indicator' + id);
-  indicator.addComponent('render', { type: 'box' });
-  const indMat = new StandardMaterial();
-  indMat.diffuse = indicatorColor;
-  indMat.castShadows = true;
-  indMat.receiveShadows = true;
-  indMat.update();
-  indicator.render.material = indMat;
-  indicator.setLocalScale(1.1, 1.1, 0.2);
-  indicator.setPosition(0, 0, -0.3);
-  indicator.enabled = false;
-
-  entity.addChild(indicator);
-  app.root.addChild(entity);
-
-  playerEntities.set(id, entity);
-  indicatorEntities.set(id, indicator);
-}
-
-function cleanupPlayerEntities() {
-  for (const [id, entity] of playerEntities) {
-    if (entity.parent) entity.parent.removeChild(entity);
-    entity.destroy();
-  }
-  playerEntities.clear();
-  indicatorEntities.clear();
-  playerMaterials.clear();
-
-  for (const [id, data] of projectileEntities) {
-    if (data.entity.parent) data.entity.parent.removeChild(data.entity);
-    data.entity.destroy();
-  }
-  projectileEntities.clear();
-}
-
-function applySnapshot(serverTick, players, projectiles) {
-  for (const p of players) {
-    let entity = playerEntities.get(p.id);
-    if (!entity) {
-      const colors = { 1: new Color(1, 0, 0), 2: new Color(0, 0, 1) };
-      const indColors = { 1: new Color(0, 1, 0), 2: new Color(0, 1, 0) };
-      createPlayerEntity(p.id, colors[p.id] || new Color(0.5, 0.5, 0.5), indColors[p.id] || new Color(0.5, 0.5, 0.5));
-      entity = playerEntities.get(p.id);
-      entity.enabled = false;
-    }
-    entity.setPosition(p.x, p.y, p.z);
-    const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? (p.angle + Math.PI) * (180 / Math.PI) : 0;
-    entity.setEulerAngles(0, angleDeg, 0);
-    entity.enabled = true;
-
-    // Update indicator visibility
-    const indicator = indicatorEntities.get(p.id);
-    if (indicator) indicator.enabled = true;
-  }
-
-  // Initialize projectile entities from server data
-  for (const proj of projectiles) {
-    let data = projectileEntities.get(proj.id);
-    if (!data) {
-      const entity = new Entity('proj' + proj.id);
-      entity.addComponent('render', { type: 'sphere' });
-      const mat = new StandardMaterial();
-      mat.diffuse = new Color(0, 1, 1);
-      entity.render.material = mat;
-      entity.setLocalScale(0.16, 0.16, 0.16);
-      app.root.addChild(entity);
-      projectileEntities.set(proj.id, { entity, spawnTime: proj.spawnTick * DT, startX: proj.startX, startY: proj.y, startZ: proj.startZ, dirX: proj.dirX, dirZ: proj.dirZ, speed: proj.speed, maxReach: proj.maxReach });
-    }
-    projectileEntities.get(proj.id).entity.enabled = true;
-  }
-
-  // Clean up destroyed projectiles
-  for (const [id, data] of projectileEntities) {
-    if (!projectiles.find(p => p.id === id)) {
-      if (data.entity.parent) data.entity.parent.removeChild(data.entity);
-      data.entity.destroy();
-      projectileEntities.delete(id);
-    }
-  }
-}
-
-// ---- Projectile simulation (runs every frame) ----
-const DT = 0.01667;
-function updateProjectiles() {
-  for (const [id, data] of projectileEntities) {
-    const elapsed = simTime - data.spawnTime;
-    if (elapsed < 0) continue;
-    const traveled = elapsed * data.speed;
-    if (traveled >= data.maxReach) continue;
-    const px = data.startX + data.dirX * elapsed * data.speed;
-    const py = data.startY;
-    const pz = data.startZ + data.dirZ * elapsed * data.speed;
-    data.entity.setPosition(px, py, pz);
-  }
-}
-
-// ---- Input handling ----
-const keys = {};
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-// Mouse tracking for aiming (world coordinates)
-let mouseX = 0, mouseY = 0, mouseDown = false;
-const ray = { origin: new Vec3(), direction: new Vec3() };
-const intersection = new Vec3();
-
-canvas.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const cam = cameraComponent.camera;
-
-  const from = new Vec3();
-  const to = new Vec3();
-  cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top, cam.nearClip, rect.width, rect.height, from);
-  cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top, cam.farClip, rect.width, rect.height, to);
-
-  ray.origin.copy(from);
-  ray.direction.sub(to, from).normalize();
-
-  const planeY = -0.5;
-  if (Math.abs(ray.direction.y) > 0.001) {
-    const t = (planeY - ray.origin.y) / ray.direction.y;
-    intersection.copy(ray.origin).addScaled(ray.direction, t);
-    mouseX = intersection.x;
-    mouseY = intersection.z;
-  }
-});
-
-canvas.addEventListener('mousedown', (e) => {
-  if (e.button === 0) mouseDown = true;
-});
-canvas.addEventListener('mouseup', (e) => {
-  if (e.button === 0) mouseDown = false;
-});
-
-// ---- Game loop ----
-let lastTime = 0;
-
-app.on('update', (dt) => {
-  simTime += dt;
-  updateProjectiles();
-  // Decrement my cooldown locally
-  if (_myCooldown > 0) {
-    _myCooldown = Math.max(0, _myCooldown - dt);
-  }
-  updateCooldownHUD();
-  // Calculate move input from keys
-  const moveX = (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
-  const moveZ = (keys['w'] ? 1 : 0) - (keys['s'] ? 1 : 0);
-  const flags = mouseDown ? 0x01 : 0;
-
-  network.update(dt, moveX, moveZ, mouseX, mouseY, flags);
-});
-
-// ---- Cooldown HUD ----
-const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
-const COOLDOWN_MAX = 4;
-let _myCooldown = 0;
-let _myPlayerId = 0;
-
-function createCooldownHUD() {
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:80px;height:80px;pointer-events:none;z-index:100;';
-  container.id = 'cooldown-container';
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 80 80');
-  svg.setAttribute('width', '80');
-  svg.setAttribute('height', '80');
-  svg.style.cssText = 'width:100%;height:100%;';
-  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  bg.setAttribute('cx', '40'); bg.setAttribute('cy', '40'); bg.setAttribute('r', '32');
-  bg.setAttribute('fill', 'rgba(0,0,0,0.5)'); bg.setAttribute('stroke', 'rgba(255,255,255,0.15)'); bg.setAttribute('stroke-width', '4');
-  svg.appendChild(bg);
-  const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  ring.id = 'cooldown-ring'; ring.setAttribute('cx', '40'); ring.setAttribute('cy', '40'); ring.setAttribute('r', '32');
-  ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', '#ff4444'); ring.setAttribute('stroke-width', '4');
-  ring.setAttribute('stroke-linecap', 'round'); ring.setAttribute('stroke-dasharray', COOLDOWN_CIRCUMFERENCE);
-  ring.setAttribute('stroke-dashoffset', COOLDOWN_CIRCUMFERENCE);
-  ring.setAttribute('transform', 'rotate(-90 40 40)');
-  svg.appendChild(ring);
-  const text = document.createElement('div');
-  text.id = 'cooldown-text';
-  text.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-40%);color:#fff;font-family:monospace;font-size:14px;font-weight:bold;text-align:center;line-height:1;';
-  text.textContent = '';
-  container.appendChild(svg);
-  container.appendChild(text);
-  document.body.appendChild(container);
-}
-createCooldownHUD();
-
-function updateCooldownHUD() {
-  const ring = document.getElementById('cooldown-ring');
-  const text = document.getElementById('cooldown-text');
-  if (_myCooldown <= 0) {
-    ring.setAttribute('stroke-dashoffset', 0);
-    text.textContent = 'READY';
-    text.style.color = '#00ff88';
-  } else {
-    const ratio = 1 - (_myCooldown / COOLDOWN_MAX);
-    ring.setAttribute('stroke-dashoffset', COOLDOWN_CIRCUMFERENCE * (1 - ratio));
-    text.textContent = _myCooldown > 0.05 ? Math.ceil(_myCooldown) + 's' : '';
-    text.style.color = '#fff';
-  }
-}
-
-app.start();
-
-// Start network connection
-network.connect();
-
+import { Game } from './src/game.js';
+const game = new Game();
+game.start();
     </script>
 </body>
 </html>
