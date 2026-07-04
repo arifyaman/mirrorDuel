@@ -2,12 +2,9 @@ export class SpellHUD {
   constructor() {
     this.container = null;
     this.myCooldownEl = null;
-    this.myCooldownLabel = null;
     this.debuffBadge = null;
     this.debuffWrap = null;
-    this.versus = null;
-    this.opponentName = null;
-    this.opponentCooldownEl = null;
+    this.oppCooldownEl = null;
     this.debuffScale = 1;
     this.debuffActive = false;
     this.debuffTime = 0;
@@ -23,54 +20,35 @@ export class SpellHUD {
       transform: translateX(-50%);
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 10px 24px;
-      background: linear-gradient(180deg, rgba(10,10,15,0.9) 0%, rgba(10,10,15,0.7) 100%);
-      border: 1px solid rgba(0,255,255,0.12);
-      border-radius: 14px;
+      gap: 20px;
+      padding: 10px 20px;
+      background: linear-gradient(180deg, rgba(10,10,15,0.85) 0%, rgba(10,10,15,0.65) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
       pointer-events: none;
       z-index: 200;
       backdrop-filter: blur(12px);
-      box-shadow:
-        0 4px 24px rgba(0,0,0,0.4),
-        0 0 16px rgba(0,255,255,0.06),
-        inset 0 1px 0 rgba(255,255,255,0.04);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 16px rgba(0,255,255,0.04);
       font-family: 'Orbitron', 'Segoe UI', sans-serif;
     `;
 
-    // LEFT: Your info
-    const left = document.createElement('div');
-    left.style.cssText = 'text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
-
-    this.myCooldownLabel = document.createElement('div');
-    this.myCooldownLabel.style.cssText = `
-      font-size: 9px;
-      letter-spacing: 3px;
-      color: rgba(0,255,255,0.5);
-      text-transform: uppercase;
-    `;
-    this.myCooldownLabel.textContent = 'YOUR SPELL';
-
+    // LEFT: My cooldown
     this.myCooldownEl = document.createElement('div');
     this.myCooldownEl.style.cssText = `
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 900;
       color: #0ff;
       text-shadow: 0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4);
     `;
     this.myCooldownEl.textContent = 'READY';
 
-    left.appendChild(this.myCooldownLabel);
-    left.appendChild(this.myCooldownEl);
-
-    // CENTER: Debuff badge (scales up when spell hits)
+    // CENTER: Debuff badge
     this.debuffWrap = document.createElement('div');
     this.debuffWrap.style.cssText = `
       display: flex;
       align-items: center;
       justify-content: center;
       transform-origin: center center;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     `;
 
     this.debuffBadge = document.createElement('div');
@@ -88,94 +66,57 @@ export class SpellHUD {
       opacity: 0;
       transition: opacity 0.3s ease-out;
     `;
-    this.debuffBadge.textContent = 'DEBUFF -50% CD';
+    this.debuffBadge.textContent = '-50% CD';
 
     this.debuffWrap.appendChild(this.debuffBadge);
 
-    // VS divider
-    this.versus = document.createElement('div');
-    this.versus.style.cssText = `
-      font-size: 11px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.2);
-      letter-spacing: 3px;
-      text-shadow: 0 0 6px rgba(255,255,255,0.05);
-    `;
-    this.versus.textContent = 'VS';
-
-    // RIGHT: Opponent info
-    const right = document.createElement('div');
-    right.style.cssText = 'text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;';
-
-    this.opponentName = document.createElement('div');
-    this.opponentName.style.cssText = `
-      font-size: 10px;
-      letter-spacing: 2px;
-      color: rgba(255,255,255,0.4);
-      text-transform: uppercase;
-    `;
-    this.opponentName.textContent = 'OPPONENT';
-
-    this.opponentCooldownEl = document.createElement('div');
-    this.opponentCooldownEl.style.cssText = `
-      font-size: 20px;
+    // RIGHT: Opponent cooldown
+    this.oppCooldownEl = document.createElement('div');
+    this.oppCooldownEl.style.cssText = `
+      font-size: 22px;
       font-weight: 900;
       color: #ff4444;
       text-shadow: 0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2);
     `;
-    this.opponentCooldownEl.textContent = '???';
+    this.oppCooldownEl.textContent = '???';
 
-    right.appendChild(this.opponentName);
-    right.appendChild(this.opponentCooldownEl);
-
-    this.container.appendChild(left);
+    this.container.appendChild(this.myCooldownEl);
     this.container.appendChild(this.debuffWrap);
-    this.container.appendChild(this.versus);
-    this.container.appendChild(right);
+    this.container.appendChild(this.oppCooldownEl);
     document.body.appendChild(this.container);
-  }
-
-  setOpponentName(name) {
-    if (this.opponentName) {
-      this.opponentName.textContent = name ? name.toUpperCase() : 'OPPONENT';
-    }
   }
 
   update(myCooldown, opponent, isDebuffTriggered) {
     // My cooldown display
-    if (this.myCooldownEl) {
-      const cd = Math.max(0, myCooldown);
-      if (cd <= 0) {
-        this.myCooldownEl.textContent = 'READY';
-        this.myCooldownEl.style.color = '#0f0';
-        this.myCooldownEl.style.textShadow = '0 0 8px #0f0, 0 0 16px rgba(0,255,0,0.4)';
-      } else if (cd > 1) {
-        this.myCooldownEl.textContent = Math.ceil(cd) + 's';
-        this.myCooldownEl.style.color = '#0ff';
-        this.myCooldownEl.style.textShadow = '0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4)';
-      } else {
-        this.myCooldownEl.textContent = cd.toFixed(2) + 's';
-        this.myCooldownEl.style.color = '#0ff';
-        this.myCooldownEl.style.textShadow = '0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4)';
-      }
+    const cd = Math.max(0, myCooldown);
+    if (cd <= 0) {
+      this.myCooldownEl.textContent = 'READY';
+      this.myCooldownEl.style.color = '#0f0';
+      this.myCooldownEl.style.textShadow = '0 0 8px #0f0, 0 0 16px rgba(0,255,0,0.4)';
+    } else if (cd > 1) {
+      this.myCooldownEl.textContent = Math.ceil(cd) + 's';
+      this.myCooldownEl.style.color = '#0ff';
+      this.myCooldownEl.style.textShadow = '0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4)';
+    } else {
+      this.myCooldownEl.textContent = cd.toFixed(2) + 's';
+      this.myCooldownEl.style.color = '#0ff';
+      this.myCooldownEl.style.textShadow = '0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4)';
     }
 
     // Opponent cooldown display
-    if (this.opponentCooldownEl) {
-      const oppCooldown = opponent ? Math.max(0, opponent.cooldown) : 0;
-      if (oppCooldown <= 0) {
-        this.opponentCooldownEl.textContent = 'READY';
-        this.opponentCooldownEl.style.color = '#0f0';
-        this.opponentCooldownEl.style.textShadow = '0 0 8px #0f0, 0 0 16px rgba(0,255,0,0.4)';
-      } else if (oppCooldown > 1) {
-        this.opponentCooldownEl.textContent = Math.ceil(oppCooldown) + 's';
-        this.opponentCooldownEl.style.color = '#ff4444';
-        this.opponentCooldownEl.style.textShadow = '0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2)';
-      } else {
-        this.opponentCooldownEl.textContent = oppCooldown.toFixed(2) + 's';
-        this.opponentCooldownEl.style.color = '#ff4444';
-        this.opponentCooldownEl.style.textShadow = '0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2)';
-      }
+    const oppCooldown = opponent ? Math.max(0, opponent.cooldown) : 0;
+    if (oppCooldown <= 0) {
+      this.oppCooldownEl.textContent = 'READY';
+      this.oppCooldownEl.style.color = '#0f0';
+      this.oppCooldownEl.style.textShadow = '0 0 8px #0f0, 0 0 16px rgba(0,255,0,0.4)';
+    } else if (oppCooldown > 1) {
+      this.oppCooldownEl.textContent = Math.ceil(oppCooldown) + 's';
+      this.oppCooldownEl.style.color = '#ff4444';
+      this.oppCooldownEl.style.textShadow = '0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2)';
+    } else {
+      this.oppCooldownEl.textContent = oppCooldown.toFixed(2) + 's';
+      this.oppCooldownEl.style.color = '#ff4444';
+      this.oppCooldownEl.style.textShadow = '0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2)';
     }
 
     // Debuff badge animation
@@ -189,14 +130,11 @@ export class SpellHUD {
       const elapsed = performance.now() - this.debuffTime;
 
       if (elapsed < 300) {
-        // Scale up phase
         const t = elapsed / 300;
         this.debuffScale = 1 + 0.6 * t;
       } else if (elapsed < 800) {
-        // Hold at max scale
         this.debuffScale = 1.6;
       } else if (elapsed < 1800) {
-        // Scale down + fade out
         const t = (elapsed - 800) / 1000;
         this.debuffScale = 1.6 - 0.6 * Math.pow(t, 0.5);
         this.debuffBadge.style.opacity = String(1 - t);
@@ -205,7 +143,6 @@ export class SpellHUD {
         this.debuffScale = 1;
       }
     } else {
-      // Smooth return to 1
       this.debuffScale += (1 - this.debuffScale) * 0.15;
       if (Math.abs(this.debuffScale - 1) < 0.005) this.debuffScale = 1;
     }

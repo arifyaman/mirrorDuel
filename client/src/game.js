@@ -49,7 +49,6 @@ export class Game {
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
     this.myCooldown = 0;
-    this.opponentName = '???';
     this._lastMyCooldown = 0;
     this._lastOpponentCooldown = 0;
     this._hudCreated = false;
@@ -61,10 +60,8 @@ export class Game {
     this.networkClient.connect();
     this.networkClient.onStatus(state => this.onStatus(state));
     this.networkClient.onDisconnect(() => this.network.onDisconnect());
-    this.networkClient.onJoin((roomId, myPlayerId, opponentName) => {
-      this.network.onJoin(myPlayerId, opponentName || '');
-      this.opponentName = this.network.opponentName;
-      if (this.spellHUD) this.spellHUD.setOpponentName(this.opponentName);
+    this.networkClient.onJoin((roomId, myPlayerId) => {
+      this.network.onJoin(myPlayerId);
     });
     this.networkClient.onSnap((tick, players, projectiles) => this.onSnap(tick, players, projectiles));
 

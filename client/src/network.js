@@ -3,12 +3,10 @@ export class Network {
     this.client = client;
     this.game = game;
     this.myPlayerId = 0;
-    this.opponentName = '';
   }
 
-  onJoin(myPlayerId, opponentName = '') {
+  onJoin(myPlayerId) {
     this.myPlayerId = myPlayerId;
-    this.opponentName = opponentName;
   }
 
   onDisconnect() {
