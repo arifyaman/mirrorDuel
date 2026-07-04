@@ -100,7 +100,7 @@ func (p *Player) ProcessInputs(dt float32) {
 		p.TargetZ += normMoveZ * speed * speedMult * dt
 	}
 
-	// Clamp target to floor bounds [-5, 5]
+ // Clamp target to floor bounds [-FloorSize/2, FloorSize/2]
 	if p.TargetX < -halfFloor {
 		p.TargetX = -halfFloor
 	} else if p.TargetX > halfFloor {

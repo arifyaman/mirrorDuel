@@ -29,7 +29,7 @@ func Default() *Config {
 	return &Config{
 		QUICPort:    4433,
 		HTTPPort:    8081,
-		FloorSize:   10,
+  FloorSize:   20,
 		PlayerSpeed: 5,
 		LerpFactor:  8,
 		SpeedStrafe: 0.75,

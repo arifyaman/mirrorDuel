@@ -5,8 +5,8 @@ export class NetworkClient {
     this.serverUrl = serverUrl;
     this.wt = null;
     this.stream = null;
-    this.writer = null;
     this.reader = null;
+    this.writer = null;
     this.state = 'disconnected';
     this.tick = 0;
     this.snapHandler = null;
@@ -16,6 +16,8 @@ export class NetworkClient {
     this.reconnectTimer = null;
     this.inputQueue = [];
     this.sendTimer = 0;
+    // Read buffer for length-prefixed framing
+    this._readBuf = new Uint8Array();
   }
 
   setStatus(state) {
@@ -63,20 +65,38 @@ export class NetworkClient {
         const { value, done } = await this.reader.read();
         if (done) break;
 
-        const type = value[0];
-        const payload = value.slice(1);
+        // Append incoming data to read buffer
+        this._readBuf = concatUint8(this._readBuf, value);
 
-        switch (type) {
-          case MSG_STATE_SNAPSHOT:
-            this.handleSnapshot(payload);
-            break;
-          case MSG_ROOM_CREATED:
-            this.handleRoomCreated(payload);
-            break;
-          case MSG_DISCONNECT:
-            this.setStatus('disconnected');
-            if (this.disconnectHandler) this.disconnectHandler('Server disconnected');
-            break;
+        // Parse complete messages
+        while (true) {
+          // Need at least 5 bytes for length(4) + type(1)
+          if (this._readBuf.length < 5) break;
+          const msgLen = (this._readBuf[0] << 24) |
+                         (this._readBuf[1] << 16) |
+                         (this._readBuf[2] << 8) |
+                          this._readBuf[3];
+          // Need full message including length prefix
+          if (this._readBuf.length < 4 + msgLen) break;
+
+          const msgType = this._readBuf[4];
+          const payload = this._readBuf.slice(5, 4 + msgLen);
+
+          // Advance buffer past this message
+          this._readBuf = this._readBuf.slice(4 + msgLen);
+
+          switch (msgType) {
+            case MSG_STATE_SNAPSHOT:
+              this.handleSnapshot(payload);
+              break;
+            case MSG_ROOM_CREATED:
+              this.handleRoomCreated(payload);
+              break;
+            case MSG_DISCONNECT:
+              this.setStatus('disconnected');
+              if (this.disconnectHandler) this.disconnectHandler('Server disconnected');
+              break;
+          }
         }
       }
     } catch (err) {
@@ -105,9 +125,15 @@ export class NetworkClient {
   async sendJoin(name) {
     if (!this.writer) return;
     const data = encodeJoinRoom(name);
-    const msg = new Uint8Array(1 + data.length);
-    msg[0] = MSG_JOIN_ROOM;
-    msg.set(data, 1);
+    const msg = new Uint8Array(5 + data.length);
+    // Length includes type byte + payload
+    const fullLen = 1 + data.length;
+    msg[0] = (fullLen >> 24) & 0xff;
+    msg[1] = (fullLen >> 16) & 0xff;
+    msg[2] = (fullLen >> 8) & 0xff;
+    msg[3] = fullLen & 0xff;
+    msg[4] = MSG_JOIN_ROOM;
+    msg.set(data, 5);
     await this.writer.write(msg);
   }
 
@@ -142,9 +168,14 @@ export class NetworkClient {
     const latest = this.inputQueue[this.inputQueue.length - 1];
     this.inputQueue = [];
     const data = encodePlayerInput(this.tick, latest.moveX, latest.moveZ, latest.mouseX, latest.mouseY, latest.flags);
-    const msg = new Uint8Array(1 + data.length);
-    msg[0] = MSG_PLAYER_INPUT;
-    msg.set(data, 1);
+    const msg = new Uint8Array(5 + data.length);
+    const fullLen = 1 + data.length;
+    msg[0] = (fullLen >> 24) & 0xff;
+    msg[1] = (fullLen >> 16) & 0xff;
+    msg[2] = (fullLen >> 8) & 0xff;
+    msg[3] = fullLen & 0xff;
+    msg[4] = MSG_PLAYER_INPUT;
+    msg.set(data, 5);
     try {
       await this.writer.write(msg);
     } catch (err) {
@@ -152,4 +183,11 @@ export class NetworkClient {
       this.setStatus('disconnected');
     }
   }
+}
+
+function concatUint8(a, b) {
+  const c = new Uint8Array(a.length + b.length);
+  c.set(a);
+  c.set(b, a.length);
+  return c;
 }

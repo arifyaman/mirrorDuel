@@ -51,6 +51,7 @@ export class Game {
     this.myCooldown = 0;
     this._prevMyCooldown = 0;
     this._hudCreated = false;
+    this._myPlayerPos = { x: 0, z: 0 };
     this.gameTitle = new GameTitle();
   }
 
@@ -90,6 +91,8 @@ export class Game {
     const myPlayer = players.find(p => p.id === this.network.myPlayerId);
     if (myPlayer) {
       this.myCooldown = Math.max(0, myPlayer.cooldown);
+      this._myPlayerPos.x = myPlayer.x;
+      this._myPlayerPos.z = myPlayer.z;
     }
 
     // Detect spell fire: cooldown jumps from 0 to >0
@@ -110,6 +113,11 @@ export class Game {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
     if (this.gameTitle) this.gameTitle.update();
+    if (this.scene) {
+      this.scene.cameraTargetMid.x = this._myPlayerPos.x;
+      this.scene.cameraTargetMid.z = this._myPlayerPos.z;
+      this.scene.updateCamera(dt);
+    }
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);
     }

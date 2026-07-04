@@ -5,6 +5,9 @@ export class Scene {
     this.app = app;
     this.cameraNode = null;
     this.cameraComponent = null;
+    this.cameraOffset = { x: 0, y: 10, z: 16 };
+    this.cameraFollowFactor = 0.5;
+    this.cameraTargetMid = { x: 0, y: 0, z: 0 };
     this.createFloor();
     this.createCamera();
     this.createLight();
@@ -15,7 +18,7 @@ export class Scene {
   createFloor() {
     const floor = new Entity('floor');
     const floorRender = floor.addComponent('render', { type: 'box' });
-    floor.setLocalScale(10, 0.05, 10);
+    floor.setLocalScale(20, 0.05, 20);
     floor.setPosition(0, -0.5, 0);
     const floorMaterial = new StandardMaterial();
     floorMaterial.diffuse = new Color(0.12, 0.12, 0.18);
@@ -29,7 +32,7 @@ export class Scene {
     // Grid lines using a large thin box as a grid plane
     const grid = new Entity('grid');
     const gridRender = grid.addComponent('render', { type: 'box' });
-    grid.setLocalScale(10, 0.01, 0.015);
+    grid.setLocalScale(20, 0.01, 0.015);
     grid.setPosition(0, -0.47, 0);
     const gridMaterial = new StandardMaterial();
     gridMaterial.diffuse = new Color(0.0, 0.8, 0.3);
@@ -43,19 +46,19 @@ export class Scene {
     // Perpendicular grid lines
     const grid2 = new Entity('grid2');
     const grid2Render = grid2.addComponent('render', { type: 'box' });
-    grid2.setLocalScale(0.015, 0.01, 10);
+    grid2.setLocalScale(0.015, 0.01, 20);
     grid2.setPosition(0, -0.47, 0);
     grid2Render.material = gridMaterial.clone();
     grid2Render.material.update();
     this.app.root.addChild(grid2);
 
     // Add multiple grid lines for a full grid pattern
-    for (let i = -4; i <= 4; i++) {
+    for (let i = -8; i <= 8; i++) {
       if (i === 0) continue;
 
       const gx = new Entity('gx' + i);
       const gxRender = gx.addComponent('render', { type: 'box' });
-      gx.setLocalScale(10, 0.01, 0.008);
+      gx.setLocalScale(20, 0.01, 0.008);
       gx.setPosition(0, -0.47, i);
       const gxMat = gridMaterial.clone();
       gxMat.diffuse = new Color(0.0, 0.35, 0.15);
@@ -67,7 +70,7 @@ export class Scene {
 
       const gz = new Entity('gz' + i);
       const gzRender = gz.addComponent('render', { type: 'box' });
-      gz.setLocalScale(0.008, 0.01, 10);
+      gz.setLocalScale(0.008, 0.01, 20);
       gz.setPosition(i, -0.47, 0);
       const gzMat = gxMat.clone();
       gzRender.material = gzMat;
@@ -82,8 +85,23 @@ export class Scene {
     });
     this.cameraNode = camera;
     this.app.root.addChild(camera);
-    camera.setPosition(0, 10, 10);
+    camera.setPosition(this.cameraOffset.x, this.cameraOffset.y, this.cameraOffset.z);
     camera.lookAt(new Vec3(0, 0, 0));
+  }
+
+updateCamera(dt) {
+    const off = this.cameraOffset;
+    const target = this.cameraTargetMid;
+    const lerpFactor = 1 - Math.exp(-4 * (dt || 0.016));
+    const pos = this.cameraNode.getPosition();
+    const baseX = target.x * this.cameraFollowFactor + off.x;
+    const baseY = target.y * this.cameraFollowFactor + off.y;
+    const baseZ = target.z * this.cameraFollowFactor + off.z;
+    this.cameraNode.setPosition(
+      pos.x + (baseX - pos.x) * lerpFactor,
+      pos.y + (baseY - pos.y) * lerpFactor,
+      pos.z + (baseZ - pos.z) * lerpFactor
+    );
   }
 
   createLight() {
@@ -108,12 +126,12 @@ export class Scene {
       shadowBias: 0.3,
       normalOffsetBias: 0.02,
       shadowResolution: 2048,
-      shadowDistance: 20,
+      shadowDistance: 30,
       shadowType: 'pc.SHADOW_SOFT'
     });
     this.app.root.addChild(directionalLight);
     directionalLight.setEulerAngles(45, -30, 0);
-    directionalLight.setPosition(5, 15, 5);
+    directionalLight.setPosition(5, 10, 5);
   }
 
   createBoundaryWalls() {
@@ -134,15 +152,15 @@ export class Scene {
     wallEdgeMat.update();
 
     // 4 boundary walls
-    const halfSize = 5;
+    const halfSize = 10;
     const wallThickness = 0.1;
     const wallHeight = 0.6;
 
     const walls = [
-      { pos: [0, -0.2, -halfSize], scale: [10 + wallThickness * 2, wallHeight, wallThickness] },
-      { pos: [0, -0.2, halfSize], scale: [10 + wallThickness * 2, wallHeight, wallThickness] },
-      { pos: [-halfSize, -0.2, 0], scale: [wallThickness, wallHeight, 10 + wallThickness * 2] },
-      { pos: [halfSize, -0.2, 0], scale: [wallThickness, wallHeight, 10 + wallThickness * 2] }
+      { pos: [0, -0.2, -halfSize], scale: [20 + wallThickness * 2, wallHeight, wallThickness] },
+      { pos: [0, -0.2, halfSize], scale: [20 + wallThickness * 2, wallHeight, wallThickness] },
+      { pos: [-halfSize, -0.2, 0], scale: [wallThickness, wallHeight, 20 + wallThickness * 2] },
+      { pos: [halfSize, -0.2, 0], scale: [wallThickness, wallHeight, 20 + wallThickness * 2] }
     ];
 
     walls.forEach((w, i) => {
