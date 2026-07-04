@@ -121,12 +121,20 @@ func (p *Player) ProcessInputs(dt float32) {
 	p.X += (p.TargetX - p.X) * alpha
 	p.Z += (p.TargetZ - p.Z) * alpha
 
-	// Update angle toward mouse cursor
+	// Update angle toward mouse cursor with turn speed limit
 	mdx := last.MouseX - p.X
 	mdz := last.MouseY - p.Z
 	dist := float32(math.Sqrt(float64(mdx*mdx + mdz*mdz)))
 	if dist > 0.01 {
-		p.Angle = float32(math.Atan2(float64(mdx), float64(mdz)))
+		desiredAngle := math.Atan2(float64(mdx), float64(mdz))
+		angleDiff := math.Atan2(math.Sin(desiredAngle-float64(p.Angle)), math.Cos(desiredAngle-float64(p.Angle)))
+		maxDelta := float64(p.Config.TurnSpeed) * float64(dt)
+		if angleDiff > maxDelta {
+			angleDiff = maxDelta
+		} else if angleDiff < -maxDelta {
+			angleDiff = -maxDelta
+		}
+		p.Angle += float32(angleDiff)
 	}
 
 	// Store aim position for projectile spawning

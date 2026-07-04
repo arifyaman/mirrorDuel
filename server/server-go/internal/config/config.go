@@ -1,5 +1,7 @@
 package config
 
+import "math"
+
 // Config holds all game configuration, mirroring config/index.ts.
 type Config struct {
 	QUICPort      int
@@ -8,6 +10,7 @@ type Config struct {
 	PlayerSpeed   float32
 	LerpFactor    float32
 	SpeedStrafe   float32
+	TurnSpeed     float32
 	Projectile    ProjectileConfig
 }
 
@@ -30,6 +33,7 @@ func Default() *Config {
 		PlayerSpeed: 5,
 		LerpFactor:  8,
 		SpeedStrafe: 0.75,
+		TurnSpeed:   math.Pi,
 		Projectile: ProjectileConfig{
 			Cooldown:      4,
 			Speed:         7.5,
