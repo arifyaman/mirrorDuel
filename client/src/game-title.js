@@ -5,6 +5,7 @@ export class GameTitle {
     this.subtitle = null;
     this.mouseX = 0;
     this.mouseY = 0;
+    this.playerId = 0;
     this.createElements();
   }
 
@@ -75,6 +76,31 @@ export class GameTitle {
       this.mouseX = e.clientX;
       this.mouseY = e.clientY;
     });
+  }
+
+  setPlayerColor(playerId) {
+    this.playerId = playerId;
+    const isRed = playerId === 1;
+    const primary = isRed ? '#f00' : '#0066ff';
+    const secondary = isRed ? '#ff4444' : '#4488ff';
+    const accent = isRed ? '#ff2200' : '#0044ff';
+    const glow = isRed ? '255,0,0' : '0,100,255';
+
+    this.title.style.background = `linear-gradient(180deg, #fff 0%, ${secondary} 50%, ${accent} 100%)`;
+    this.title.style.textShadow = `
+      0 0 10px ${primary},
+      0 0 20px ${secondary},
+      0 0 40px ${primary},
+      0 0 80px rgba(${glow},0.4),
+      0 0 120px rgba(${glow},0.2)
+    `;
+    this.title.style.filter = `drop-shadow(0 0 12px rgba(${glow},0.8))`;
+
+    this.subtitle.style.color = secondary;
+    this.subtitle.style.textShadow = `
+      0 0 6px rgba(${glow},0.6),
+      0 0 12px rgba(${glow},0.3)
+    `;
   }
 
   update() {
