@@ -33,7 +33,7 @@ func Default() *Config {
 		PlayerSpeed: 5,
 		LerpFactor:  8,
 		SpeedStrafe: 0.75,
-		TurnSpeed:   math.Pi,
+		TurnSpeed:   math.Pi*2.5,
 		Projectile: ProjectileConfig{
 			Cooldown:      4,
 			Speed:         7.5,
