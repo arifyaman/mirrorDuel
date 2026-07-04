@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"sync"
 	"sync/atomic"
@@ -127,30 +126,19 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func main() {
 	cfg := config.Default()
 
-	certFile := "tls/cert.pem"
-	keyFile := "tls/key.pem"
+	certFile := "tls/localhost.pem"
+	keyFile := "tls/localhost-key.pem"
 
 	_, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		fmt.Printf("[TLS] Failed to load cert: %v. Generating self-signed...\n", err)
-		cmd := exec.Command("go", "run", "tls/gen_cert.go")
-		cmd.Dir = "."
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			panic(fmt.Sprintf("[TLS] Failed to generate cert: %v", err))
-		}
-		_, err = tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			panic(err)
-		}
+		panic(fmt.Sprintf("[TLS] Failed to load cert: %v", err))
 	}
 
 	certHash := getCertSHA256(certFile)
 	if certHash == "" {
 		panic("Failed to read cert for hash")
 	}
-	fmt.Printf("[TLS] Certificate SHA-256: %s\n", certHash)
+	fmt.Printf("[TLS] Certificate DER SHA-256: %s\n", certHash)
 
 	// --- Room Manager ---
 	rm := room.NewRoomManager(cfg)
