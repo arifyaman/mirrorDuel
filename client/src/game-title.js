@@ -5,8 +5,8 @@ export class GameTitle {
     this.subtitle = null;
     this.mouseX = 0;
     this.mouseY = 0;
-    this.jumping = false;
-    this.jumpTime = 0;
+    this.bouncing = false;
+    this.bounceTime = 0;
     this.createElements();
   }
 
@@ -47,6 +47,7 @@ export class GameTitle {
       -webkit-text-fill-color: transparent;
       background-clip: text;
       filter: drop-shadow(0 0 12px rgba(255,50,0,0.8));
+      will-change: transform;
     `;
     this.title.textContent = 'MIRROR DUEL!';
 
@@ -81,9 +82,9 @@ export class GameTitle {
   }
 
   triggerJump() {
-    if (this.jumping) return;
-    this.jumping = true;
-    this.jumpTime = performance.now();
+    if (this.bouncing) return;
+    this.bouncing = true;
+    this.bounceTime = performance.now();
   }
 
   update() {
@@ -93,39 +94,80 @@ export class GameTitle {
     const dx = (this.mouseX - centerX) / centerX;
     const dy = (this.mouseY - centerY) / centerY;
 
-    // Jump animation
-    let jumpY = 0;
-    let jumpScale = 1;
-    if (this.jumping) {
-      const elapsed = performance.now() - this.jumpTime;
-      const duration = 500;
+    // Bounce animation (like a ball hitting the ground)
+    let offsetY = 0;
+    let scaleY = 1;
+    let scaleX = 1;
+    let rotDeg = 0;
 
-      if (elapsed < duration) {
-        // Bouncy overshoot curve
-        const t = elapsed / duration;
-        // Cubic ease out with bounce
-        const eased = t < 0.5
-          ? 4 * t * t * t
-          : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        // Subtle scale pulse
-        jumpScale = 1 + Math.sin(t * Math.PI) * 0.12;
-        // Slight upward hop
-        jumpY = -Math.sin(t * Math.PI) * 6;
-      } else {
-        this.jumping = false;
-        jumpScale = 1;
-        jumpY = 0;
+    if (this.bouncing) {
+      const elapsed = performance.now() - this.bounceTime;
+      const totalBounces = 4;
+      const bounceDurations = [400, 280, 190, 130]; // each bounce shorter
+      const bounceHeights = [40, 25, 14, 8];
+      let accumulated = 0;
+      let reachedEnd = false;
+
+      for (let i = 0; i < totalBounces; i++) {
+        if (elapsed >= accumulated && elapsed < accumulated + bounceDurations[i]) {
+          const t = (elapsed - accumulated) / bounceDurations[i];
+
+          // Gravity physics: y = 4h * t * (1 - t), parabolic
+          // Bounce starts from 0, goes up to height, lands at 0
+          offsetY = -bounceHeights[i] * Math.sin(t * Math.PI);
+
+          // Squash on impact (at t=0 and t=1)
+          if (t < 0.12) {
+            // Landing squash
+            const sqT = t / 0.12;
+            const squash = Math.sin(sqT * Math.PI * 0.5);
+            scaleY = 1 - 0.12 * squash;
+            scaleX = 1 + 0.12 * squash;
+          } else if (t > 0.88) {
+            // Landing squash
+            const sqT = (1 - t) / 0.12;
+            const squash = Math.sin(sqT * Math.PI * 0.5);
+            scaleY = 1 - 0.12 * squash;
+            scaleX = 1 + 0.12 * squash;
+          } else {
+            scaleY = 1;
+            scaleX = 1;
+          }
+
+          // Subtle rotation wobble on bounce
+          rotDeg = Math.sin(t * Math.PI * 2) * 3 * (1 - t);
+
+          accumulated += bounceDurations[i];
+          break;
+        } else if (elapsed >= accumulated + bounceDurations[i]) {
+          accumulated += bounceDurations[i];
+          if (i === totalBounces - 1) {
+            offsetY = 0;
+            scaleY = 1;
+            scaleX = 1;
+            rotDeg = 0;
+            this.bouncing = false;
+            reachedEnd = true;
+          }
+        }
+      }
+
+      if (elapsed >= accumulated) {
+        offsetY = 0;
+        scaleY = 1;
+        scaleX = 1;
+        rotDeg = 0;
+        this.bouncing = false;
       }
     }
 
     this.container.style.transform = `
       translateX(calc(-50% + ${dx * 12}px))
-      translateY(${dy * 6 + jumpY}px)
+      translateY(${dy * 6 + offsetY}px)
       rotateX(${dy * -2}deg)
       rotateY(${dx * 3}deg)
+      scale(${scaleX}, ${scaleY})
     `;
-
-    this.subtitle.style.transform = `scale(${jumpScale})`;
   }
 
   destroy() {
