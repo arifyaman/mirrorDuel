@@ -6,7 +6,7 @@ export class Scene {
     this.cameraNode = null;
     this.cameraComponent = null;
     this.cameraOffset = { x: 0, y: 10, z: 16 };
-    this.cameraFollowFactor = 0.5;
+    this.cameraFollowFactor = 0.4;
     this.cameraTargetMid = { x: 0, y: 0, z: 0 };
     this.createFloor();
     this.createCamera();

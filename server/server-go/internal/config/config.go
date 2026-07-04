@@ -36,8 +36,8 @@ func Default() *Config {
 		TurnSpeed:   math.Pi*2.5,
 		Projectile: ProjectileConfig{
 			Cooldown:      3,
-			Speed:         7.5,
-			MaxReach:      4,
+			Speed:         13.5,
+			MaxReach:      8,
 			MaxParticles:  18,
 			BurstSpeed:    8,
 			BurstDuration: 1.5,
