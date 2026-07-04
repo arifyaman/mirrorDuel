@@ -15,7 +15,7 @@ import { Network } from './network.js';
 import { Physics } from './physics.js';
 import { Input } from './input.js';
 import { CooldownHUD } from './hud.js';
-import { SpellNotification } from './spell-notification.js';
+import { SpellHUD } from './spell-notification.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
@@ -51,11 +51,9 @@ export class Game {
     this.myCooldown = 0;
     this.opponentName = '???';
     this._lastMyCooldown = 0;
+    this._lastOpponentCooldown = 0;
     this._hudCreated = false;
-    this.spellNotif = new SpellNotification();
-    window.addEventListener('mousemove', e => {
-      if (this.spellNotif) this.spellNotif.onMouseMove(e);
-    });
+    this.spellHUD = new SpellHUD();
   }
 
   start() {
@@ -66,6 +64,7 @@ export class Game {
     this.networkClient.onJoin((roomId, myPlayerId, opponentName) => {
       this.network.onJoin(myPlayerId, opponentName || '');
       this.opponentName = this.network.opponentName;
+      if (this.spellHUD) this.spellHUD.setOpponentName(this.opponentName);
     });
     this.networkClient.onSnap((tick, players, projectiles) => this.onSnap(tick, players, projectiles));
 
@@ -98,22 +97,23 @@ export class Game {
     }
 
     const opponent = players.find(p => p.id !== this.network.myPlayerId);
+    const oppCooldown = opponent ? Math.max(0, opponent.cooldown) : 0;
 
-    // Detect when I fire (cooldown just went from 0 to >0)
-    if (myPlayer && this._lastMyCooldown <= 0 && myPlayer.cooldown > 0) {
-      this.spellNotif.show(this.opponentName || 'OPPONENT', false);
-    }
-
-    // Detect when opponent gets debuffed (50% cooldown reduction)
-    if (opponent && this._lastOpponentCooldown > 0 && myPlayer) {
-      const ratio = opponent.cooldown / this._lastOpponentCooldown;
+    // Detect debuff trigger: opponent cooldown drops to ~50%
+    let isDebuffTriggered = false;
+    if (this._lastOpponentCooldown > 0) {
+      const ratio = oppCooldown / this._lastOpponentCooldown;
       if (ratio < 0.6 && ratio > 0.4) {
-        this.spellNotif.show(this.opponentName || 'OPPONENT', true);
+        isDebuffTriggered = true;
       }
     }
 
+    if (this.spellHUD) {
+      this.spellHUD.update(this.myCooldown, opponent, isDebuffTriggered);
+    }
+
     this._lastMyCooldown = this.myCooldown;
-    this._lastOpponentCooldown = opponent ? Math.max(0, opponent.cooldown) : 0;
+    this._lastOpponentCooldown = oppCooldown;
 
     this.physics.applySnapshot(players, projectiles);
   }
@@ -126,7 +126,6 @@ export class Game {
   update(dt) {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
-    if (this.spellNotif) this.spellNotif.update();
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);
     }

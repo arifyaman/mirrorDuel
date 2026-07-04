@@ -1,14 +1,16 @@
-export class SpellNotification {
+export class SpellHUD {
   constructor() {
     this.container = null;
-    this.text = null;
-    this.subtitle = null;
-    this.particles = [];
-    this.active = false;
-    this.startTime = 0;
-    this.duration = 2.5;
-    this.mouseX = 0;
-    this.mouseY = 0;
+    this.myCooldownEl = null;
+    this.myCooldownLabel = null;
+    this.debuffBadge = null;
+    this.debuffWrap = null;
+    this.versus = null;
+    this.opponentName = null;
+    this.opponentCooldownEl = null;
+    this.debuffScale = 1;
+    this.debuffActive = false;
+    this.debuffTime = 0;
     this.createElements();
   }
 
@@ -16,189 +18,199 @@ export class SpellNotification {
     this.container = document.createElement('div');
     this.container.style.cssText = `
       position: fixed;
-      top: 12%;
+      top: 12px;
       left: 50%;
-      transform: translate(-50%, -50%);
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 24px;
+      background: linear-gradient(180deg, rgba(10,10,15,0.9) 0%, rgba(10,10,15,0.7) 100%);
+      border: 1px solid rgba(0,255,255,0.12);
+      border-radius: 14px;
       pointer-events: none;
       z-index: 200;
-      text-align: center;
-      opacity: 0;
-      transition: none;
-    `;
-
-    // Main text (spell name)
-    this.text = document.createElement('div');
-    this.text.style.cssText = `
+      backdrop-filter: blur(12px);
+      box-shadow:
+        0 4px 24px rgba(0,0,0,0.4),
+        0 0 16px rgba(0,255,255,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.04);
       font-family: 'Orbitron', 'Segoe UI', sans-serif;
-      font-size: 32px;
-      font-weight: 900;
-      color: #fff;
-      text-transform: uppercase;
-      letter-spacing: 6px;
-      text-shadow:
-        0 0 10px #0ff,
-        0 0 20px #0ff,
-        0 0 40px #0ff,
-        0 0 80px #08f;
-      margin-bottom: 8px;
-      line-height: 1.2;
     `;
 
-    // Subtitle (debuff info)
-    this.subtitle = document.createElement('div');
-    this.subtitle.style.cssText = `
-      font-family: 'Courier New', monospace;
-      font-size: 14px;
-      font-weight: bold;
-      color: #ff4444;
-      text-shadow: 0 0 10px #f00, 0 0 20px #f00;
+    // LEFT: Your info
+    const left = document.createElement('div');
+    left.style.cssText = 'text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+
+    this.myCooldownLabel = document.createElement('div');
+    this.myCooldownLabel.style.cssText = `
+      font-size: 9px;
       letter-spacing: 3px;
+      color: rgba(0,255,255,0.5);
       text-transform: uppercase;
-      opacity: 0.9;
+    `;
+    this.myCooldownLabel.textContent = 'YOUR SPELL';
+
+    this.myCooldownEl = document.createElement('div');
+    this.myCooldownEl.style.cssText = `
+      font-size: 20px;
+      font-weight: 900;
+      color: #0ff;
+      text-shadow: 0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4);
+    `;
+    this.myCooldownEl.textContent = 'READY';
+
+    left.appendChild(this.myCooldownLabel);
+    left.appendChild(this.myCooldownEl);
+
+    // CENTER: Debuff badge (scales up when spell hits)
+    this.debuffWrap = document.createElement('div');
+    this.debuffWrap.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center center;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     `;
 
-    // Container for particles
-    this.particlesContainer = document.createElement('div');
-    this.particlesContainer.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      overflow: visible;
+    this.debuffBadge = document.createElement('div');
+    this.debuffBadge.style.cssText = `
+      font-size: 10px;
+      font-weight: 800;
+      color: #ff6644;
+      background: linear-gradient(135deg, rgba(255,50,50,0.2) 0%, rgba(255,100,50,0.15) 100%);
+      border: 1px solid rgba(255,80,50,0.4);
+      border-radius: 20px;
+      padding: 4px 12px;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 8px rgba(255,80,50,0.6), 0 0 16px rgba(255,50,50,0.3);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
     `;
+    this.debuffBadge.textContent = 'DEBUFF -50% CD';
 
-    this.container.appendChild(this.particlesContainer);
-    this.container.appendChild(this.text);
-    this.container.appendChild(this.subtitle);
+    this.debuffWrap.appendChild(this.debuffBadge);
+
+    // VS divider
+    this.versus = document.createElement('div');
+    this.versus.style.cssText = `
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 3px;
+      text-shadow: 0 0 6px rgba(255,255,255,0.05);
+    `;
+    this.versus.textContent = 'VS';
+
+    // RIGHT: Opponent info
+    const right = document.createElement('div');
+    right.style.cssText = 'text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;';
+
+    this.opponentName = document.createElement('div');
+    this.opponentName.style.cssText = `
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+    `;
+    this.opponentName.textContent = 'OPPONENT';
+
+    this.opponentCooldownEl = document.createElement('div');
+    this.opponentCooldownEl.style.cssText = `
+      font-size: 20px;
+      font-weight: 900;
+      color: #ff4444;
+      text-shadow: 0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2);
+    `;
+    this.opponentCooldownEl.textContent = '???';
+
+    right.appendChild(this.opponentName);
+    right.appendChild(this.opponentCooldownEl);
+
+    this.container.appendChild(left);
+    this.container.appendChild(this.debuffWrap);
+    this.container.appendChild(this.versus);
+    this.container.appendChild(right);
     document.body.appendChild(this.container);
   }
 
-  show(opponentName, isOpponentHit = false) {
-    if (this.active) this.hide();
-    this.active = true;
-    this.startTime = performance.now();
-    this.opponentName = opponentName;
-    this.isOpponentHit = isOpponentHit;
-    this.container.style.opacity = '1';
-    this.text.textContent = isOpponentHit ? 'DEBUFFED' : 'SPELL FIRED';
-    this.subtitle.textContent = `${isOpponentHit ? '⚡' : '→'} ${opponentName} ${isOpponentHit ? '⚡' : '- 50% CD'}`;
-  }
-
-  hide() {
-    this.active = false;
-    this.container.style.opacity = '0';
-    this.particlesContainer.innerHTML = '';
-    this.particles = [];
-  }
-
-  update() {
-    if (!this.active) return;
-
-    const elapsed = (performance.now() - this.startTime) / 1000;
-    const progress = elapsed / this.duration;
-
-    if (progress >= 1) {
-      this.hide();
-      return;
+  setOpponentName(name) {
+    if (this.opponentName) {
+      this.opponentName.textContent = name ? name.toUpperCase() : 'OPPONENT';
     }
-
-    // Fade in then fade out
-    let opacity = 1;
-    if (progress < 0.1) {
-      opacity = progress / 0.1;
-    } else if (progress > 0.6) {
-      opacity = 1 - ((progress - 0.6) / 0.4);
-    }
-    this.container.style.opacity = String(Math.max(0, opacity));
-
-    // Subtle scale pulse
-    const scale = 1 + Math.sin(elapsed * 8) * 0.05;
-    this.text.style.transform = `scale(${scale})`;
-
-    // Color shift from cyan to red over time
-    const hue = 180 - progress * 100;
-    const color = `hsl(${hue}, 100%, 70%)`;
-    this.text.style.color = color;
-    this.text.style.textShadow = `
-      0 0 10px hsl(${hue}, 100%, 50%),
-      0 0 20px hsl(${hue}, 100%, 40%),
-      0 0 40px hsl(${hue}, 100%, 30%),
-      0 0 80px hsl(${hue}, 100%, 20%)
-    `;
-
-    // Mouse parallax
-    const dx = (this.mouseX - window.innerWidth / 2) / window.innerWidth;
-    const dy = (this.mouseY - window.innerHeight / 2) / window.innerHeight;
-    this.container.style.marginLeft = `${dx * 20}px`;
-    this.container.style.marginTop = `${dy * 10}px`;
-
-    // Spawn particles
-    if (Math.random() < 0.3 && this.particles.length < 15) {
-      this.spawnParticle();
-    }
-
-    // Update particles
-    this.updateParticles();
   }
 
-  spawnParticle() {
-    const particle = document.createElement('div');
-    const size = Math.random() * 4 + 2;
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 30 + 10;
-    const life = Math.random() * 0.8 + 0.3;
-
-    particle.style.cssText = `
-      position: absolute;
-      width: ${size}px;
-      height: ${size}px;
-      background: radial-gradient(circle, #fff, hsl(${Math.random() * 60 + 160}, 100%, 60%));
-      border-radius: 50%;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      box-shadow: 0 0 ${size * 2}px hsl(${Math.random() * 60 + 160}, 100%, 60%);
-      opacity: 1;
-    `;
-
-    this.particlesContainer.appendChild(particle);
-    this.particles.push({
-      el: particle,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: life,
-      age: 0,
-      startX: 0,
-      startY: 0,
-    });
-  }
-
-  updateParticles() {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      p.age += 1 / 60;
-      const progress = p.age / p.life;
-
-      if (progress >= 1) {
-        if (p.el.parentNode) p.el.parentNode.removeChild(p.el);
-        this.particles.splice(i, 1);
-        continue;
+  update(myCooldown, opponent, isDebuffTriggered) {
+    // My cooldown display
+    if (this.myCooldownEl) {
+      const cd = Math.max(0, myCooldown);
+      if (cd <= 0) {
+        this.myCooldownEl.textContent = 'READY';
+        this.myCooldownEl.style.color = '#0f0';
+        this.myCooldownEl.style.textShadow = '0 0 8px #0f0, 0 0 16px rgba(0,255,0,0.4)';
+      } else if (cd > 1) {
+        this.myCooldownEl.textContent = Math.ceil(cd) + 's';
+        this.myCooldownEl.style.color = '#0ff';
+        this.myCooldownEl.style.textShadow = '0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4)';
+      } else {
+        this.myCooldownEl.textContent = cd.toFixed(2) + 's';
+        this.myCooldownEl.style.color = '#0ff';
+        this.myCooldownEl.style.textShadow = '0 0 8px #0ff, 0 0 16px rgba(0,255,255,0.4)';
       }
-
-      const x = p.vx * p.age;
-      const y = p.vy * p.age - p.age * p.age * 30;
-      const opacity = 1 - progress;
-      const scale = 1 - progress * 0.5;
-
-      p.el.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${scale})`;
-      p.el.style.opacity = String(opacity);
     }
-  }
 
-  onMouseMove(e) {
-    this.mouseX = e.clientX;
-    this.mouseY = e.clientY;
+    // Opponent cooldown display
+    if (this.opponentCooldownEl) {
+      const oppCooldown = opponent ? Math.max(0, opponent.cooldown) : 0;
+      if (oppCooldown <= 0) {
+        this.opponentCooldownEl.textContent = 'READY';
+        this.opponentCooldownEl.style.color = '#0f0';
+        this.opponentCooldownEl.style.textShadow = '0 0 8px #0f0, 0 0 16px rgba(0,255,0,0.4)';
+      } else if (oppCooldown > 1) {
+        this.opponentCooldownEl.textContent = Math.ceil(oppCooldown) + 's';
+        this.opponentCooldownEl.style.color = '#ff4444';
+        this.opponentCooldownEl.style.textShadow = '0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2)';
+      } else {
+        this.opponentCooldownEl.textContent = oppCooldown.toFixed(2) + 's';
+        this.opponentCooldownEl.style.color = '#ff4444';
+        this.opponentCooldownEl.style.textShadow = '0 0 8px rgba(255,50,50,0.4), 0 0 16px rgba(255,50,50,0.2)';
+      }
+    }
+
+    // Debuff badge animation
+    if (isDebuffTriggered) {
+      this.debuffActive = true;
+      this.debuffTime = performance.now();
+      this.debuffBadge.style.opacity = '1';
+    }
+
+    if (this.debuffActive) {
+      const elapsed = performance.now() - this.debuffTime;
+
+      if (elapsed < 300) {
+        // Scale up phase
+        const t = elapsed / 300;
+        this.debuffScale = 1 + 0.6 * t;
+      } else if (elapsed < 800) {
+        // Hold at max scale
+        this.debuffScale = 1.6;
+      } else if (elapsed < 1800) {
+        // Scale down + fade out
+        const t = (elapsed - 800) / 1000;
+        this.debuffScale = 1.6 - 0.6 * Math.pow(t, 0.5);
+        this.debuffBadge.style.opacity = String(1 - t);
+      } else {
+        this.debuffActive = false;
+        this.debuffScale = 1;
+      }
+    } else {
+      // Smooth return to 1
+      this.debuffScale += (1 - this.debuffScale) * 0.15;
+      if (Math.abs(this.debuffScale - 1) < 0.005) this.debuffScale = 1;
+    }
+
+    this.debuffWrap.style.transform = `scale(${this.debuffScale})`;
   }
 
   destroy() {
