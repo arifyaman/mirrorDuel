@@ -24,20 +24,23 @@ type RoomCallbacks struct {
 
 // RoomManager handles matchmaking, input routing, tick loop, and state broadcast.
 type RoomManager struct {
-	Config          *config.Config
-	Rooms           []*GameSession
-	NextRoomID      int
-	TickAccumulator float32
-	Callbacks       RoomCallbacks
+	Config                 *config.Config
+	Rooms                  []*GameSession
+	NextRoomID             int
+	TickAccumulator        float32
+	TickCounter            int
+	OrphanedCleanupCounter int
+	Callbacks              RoomCallbacks
 }
 
 // NewRoomManager creates a new RoomManager.
 func NewRoomManager(cfg *config.Config) *RoomManager {
 	return &RoomManager{
-		Config:          cfg,
-		Rooms:           make([]*GameSession, 0),
-		NextRoomID:      1,
+		Config:      cfg,
+		Rooms:       make([]*GameSession, 0),
+		NextRoomID:  1,
 		TickAccumulator: 0,
+		TickCounter: 0,
 	}
 }
 
@@ -158,8 +161,13 @@ func (m *RoomManager) Update(dt float32) {
 }
 
 func (m *RoomManager) tickStep() {
+	m.TickCounter++
 	for _, room := range m.Rooms {
 		room.TickStep()
+	}
+	// Cleanup empty rooms every 30 ticks (~0.5 seconds)
+	if m.TickCounter%30 == 0 {
+		m.CleanupEmptyRooms()
 	}
 	m.broadcast()
 }
@@ -196,17 +204,25 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 		delete(room.Players, playerID)
 
-		// Notify opponent
+		// Notify remaining players they've been kicked
 		for _, p := range room.Players {
 			if p.Session != nil {
 				p.Session.SendDisconnect()
 			}
 		}
 
-		// Remove empty rooms
+		// Remove empty rooms immediately
 		if len(room.Players) == 0 {
 			fmt.Printf("[Room] Empty room %d removed\n", room.RoomID)
 			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
+			room.mu.Unlock()
+
+			if m.Callbacks.OnSessionDisconnect != nil {
+				m.Callbacks.OnSessionDisconnect(session)
+			}
+
+			fmt.Printf("[Room] Player %d disconnected\n", playerID)
+			return
 		}
 
 		room.mu.Unlock()
@@ -215,8 +231,24 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 			m.Callbacks.OnSessionDisconnect(session)
 		}
 
-		fmt.Printf("[Room] Player %d disconnected\n", playerID)
+		fmt.Printf("[Room] Player %d disconnected, room %d now has %d player(s)\n", playerID, room.RoomID, len(room.Players))
 		return
+	}
+}
+
+// CleanupEmptyRooms removes rooms with no players connected.
+// Called periodically during the tick step to prevent room accumulation.
+func (m *RoomManager) CleanupEmptyRooms() {
+	for i := len(m.Rooms) - 1; i >= 0; i-- {
+		room := m.Rooms[i]
+		room.mu.Lock()
+		if len(room.Players) == 0 {
+			room.mu.Unlock()
+			fmt.Printf("[Room] Removed empty room %d\n", room.RoomID)
+			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
+		} else {
+			room.mu.Unlock()
+		}
 	}
 }
 
