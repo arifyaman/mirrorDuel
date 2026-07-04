@@ -17,24 +17,41 @@ export class Physics {
   }
 
   applyPlayers(players) {
-    const colors = { 1: new Color(1, 0, 0), 2: new Color(0, 0, 1) };
-    const indColors = { 1: new Color(0, 1, 0), 2: new Color(0, 1, 0) };
+    const colors = {
+      1: { diffuse: new Color(1, 0.15, 0.15), emissive: new Color(1, 0.05, 0.05) },
+      2: { diffuse: new Color(0.15, 0.15, 1), emissive: new Color(0.05, 0.05, 1) }
+    };
 
     for (const p of players) {
       let entity = this.playerEntities.get(p.id);
       if (!entity) {
-        const col = colors[p.id] || new Color(0.5, 0.5, 0.5);
-        const indCol = indColors[p.id] || new Color(0.5, 0.5, 0.5);
-        entity = this.createPlayerEntity(p.id, col, indCol);
+        const col = colors[p.id] || { diffuse: new Color(0.5, 0.5, 0.5), emissive: new Color(0.2, 0.2, 0.2) };
+        entity = this.createGlowingPlayer(p.id, col.diffuse, col.emissive);
         entity.enabled = false;
       }
+
+      // Pulsing emissive for player
+      const mat = entity.render.material;
+      if (mat.emissiveIntensity === undefined) {
+        mat.emissiveIntensity = 0.8;
+        mat.update();
+      }
+
       entity.setPosition(p.x, p.y, p.z);
       const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? (p.angle + Math.PI) * (180 / Math.PI) : 0;
       entity.setEulerAngles(0, angleDeg, 0);
       entity.enabled = true;
 
       const indicator = this.indicatorEntities.get(p.id);
-      if (indicator) indicator.enabled = true;
+      if (indicator) {
+        indicator.enabled = true;
+        const indMat = indicator.render.material;
+        if (indMat.emissiveIntensity === undefined) {
+          indMat.emissive = new Color(0.0, 1.0, 0.3);
+          indMat.emissiveIntensity = 0.8;
+          indMat.update();
+        }
+      }
     }
   }
 
@@ -44,7 +61,7 @@ export class Physics {
     for (const proj of projectives) {
       let data = this.projectileEntities.get(proj.id);
       if (!data) {
-        const entity = this.createProjectileEntity(proj.id);
+        const entity = this.createGlowingProjectile(proj.id);
         data = {
           entity,
           spawnTime: proj.spawnTick * DT,
@@ -72,23 +89,41 @@ export class Physics {
     }
   }
 
-  createPlayerEntity(id, color, indicatorColor) {
+  createGlowingPlayer(id, color, emissiveColor) {
     const entity = new Entity('player' + id);
     entity.addComponent('render', { type: 'box' });
     const material = new StandardMaterial();
     material.diffuse = color;
+    material.emissive = emissiveColor;
+    material.emissiveIntensity = 0.8;
+    material.roughness = 0.3;
+    material.metalness = 0.7;
     material.castShadows = true;
     material.receiveShadows = true;
     material.update();
     entity.render.material = material;
     entity.setLocalScale(0.5, 0.5, 0.5);
 
+    // Inner bright edge (wireframe-like overlay)
+    const edges = new Entity('edges' + id);
+    const edgeRender = edges.addComponent('render', { type: 'box' });
+    const edgeMat = new StandardMaterial();
+    edgeMat.diffuse = emissiveColor;
+    edgeMat.emissive = emissiveColor;
+    edgeMat.emissiveIntensity = 1.0;
+    edgeMat.update();
+    edgeRender.material = edgeMat;
+    edges.setLocalScale(0.52, 0.52, 0.52);
+
+    entity.addChild(edges);
+
+    // Green forward indicator (glowing)
     const indicator = new Entity('indicator' + id);
     indicator.addComponent('render', { type: 'box' });
     const indMat = new StandardMaterial();
-    indMat.diffuse = indicatorColor;
-    indMat.castShadows = true;
-    indMat.receiveShadows = true;
+    indMat.diffuse = new Color(0.0, 1.0, 0.3);
+    indMat.emissive = new Color(0.0, 0.8, 0.2);
+    indMat.emissiveIntensity = 0.8;
     indMat.update();
     indicator.render.material = indMat;
     indicator.setLocalScale(1.1, 1.1, 0.2);
@@ -102,11 +137,16 @@ export class Physics {
     return entity;
   }
 
-  createProjectileEntity(id) {
+  createGlowingProjectile(id) {
     const entity = new Entity('proj' + id);
     entity.addComponent('render', { type: 'sphere' });
     const mat = new StandardMaterial();
-    mat.diffuse = new Color(0, 1, 1);
+    mat.diffuse = new Color(0.2, 1, 1);
+    mat.emissive = new Color(0.0, 0.8, 0.8);
+    mat.emissiveIntensity = 1.2;
+    mat.roughness = 0.2;
+    mat.metalness = 0.8;
+    mat.update();
     entity.render.material = mat;
     entity.setLocalScale(0.16, 0.16, 0.16);
     this.app.root.addChild(entity);

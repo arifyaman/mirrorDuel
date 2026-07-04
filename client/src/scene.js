@@ -8,26 +8,77 @@ export class Scene {
     this.createFloor();
     this.createCamera();
     this.createLight();
+    this.createBoundaryWalls();
     this.setupPostProcessing();
   }
 
   createFloor() {
     const floor = new Entity('floor');
     const floorRender = floor.addComponent('render', { type: 'box' });
-    floor.setLocalScale(10, 0.1, 10);
+    floor.setLocalScale(10, 0.05, 10);
     floor.setPosition(0, -0.5, 0);
     const floorMaterial = new StandardMaterial();
-    floorMaterial.diffuse = new Color(0.75, 0.75, 0.75);
+    floorMaterial.diffuse = new Color(0.06, 0.06, 0.12);
+    floorMaterial.roughness = 0.8;
+    floorMaterial.metalness = 0.1;
     floorMaterial.receiveShadows = true;
     floorMaterial.update();
     floorRender.material = floorMaterial;
     this.app.root.addChild(floor);
+
+    // Grid lines using a large thin box as a grid plane
+    const grid = new Entity('grid');
+    const gridRender = grid.addComponent('render', { type: 'box' });
+    grid.setLocalScale(10, 0.01, 0.015);
+    grid.setPosition(0, -0.47, 0);
+    const gridMaterial = new StandardMaterial();
+    gridMaterial.diffuse = new Color(0.0, 0.8, 0.3);
+    gridMaterial.emissive = new Color(0.0, 0.5, 0.2);
+    gridMaterial.emissiveIntensity = 0.5;
+    gridMaterial.roughness = 0.5;
+    gridMaterial.update();
+    gridRender.material = gridMaterial;
+    this.app.root.addChild(grid);
+
+    // Perpendicular grid lines
+    const grid2 = new Entity('grid2');
+    const grid2Render = grid2.addComponent('render', { type: 'box' });
+    grid2.setLocalScale(0.015, 0.01, 10);
+    grid2.setPosition(0, -0.47, 0);
+    grid2Render.material = gridMaterial.clone();
+    grid2Render.material.update();
+    this.app.root.addChild(grid2);
+
+    // Add multiple grid lines for a full grid pattern
+    for (let i = -4; i <= 4; i++) {
+      if (i === 0) continue;
+
+      const gx = new Entity('gx' + i);
+      const gxRender = gx.addComponent('render', { type: 'box' });
+      gx.setLocalScale(10, 0.01, 0.008);
+      gx.setPosition(0, -0.47, i);
+      const gxMat = gridMaterial.clone();
+      gxMat.diffuse = new Color(0.0, 0.35, 0.15);
+      gxMat.emissive = new Color(0.0, 0.2, 0.1);
+      gxMat.emissiveIntensity = 0.3;
+      gxMat.update();
+      gxRender.material = gxMat;
+      this.app.root.addChild(gx);
+
+      const gz = new Entity('gz' + i);
+      const gzRender = gz.addComponent('render', { type: 'box' });
+      gz.setLocalScale(0.008, 0.01, 10);
+      gz.setPosition(i, -0.47, 0);
+      const gzMat = gxMat.clone();
+      gzRender.material = gzMat;
+      this.app.root.addChild(gz);
+    }
   }
 
   createCamera() {
     const camera = new Entity('camera');
     this.cameraComponent = camera.addComponent('camera', {
-      clearColor: new Color(0.1, 0.2, 0.3)
+      clearColor: new Color(0.03, 0.03, 0.04)
     });
     this.cameraNode = camera;
     this.app.root.addChild(camera);
@@ -36,11 +87,23 @@ export class Scene {
   }
 
   createLight() {
+    // Dimmer ambient
+    const ambientLight = new Entity('ambient');
+    ambientLight.addComponent('light', {
+      type: 'ambient',
+      color: new Color(0.15, 0.15, 0.2),
+      intensity: 1.0,
+      skyColor: new Color(0.1, 0.1, 0.15),
+      groundColor: new Color(0.05, 0.05, 0.08)
+    });
+    this.app.root.addChild(ambientLight);
+
+    // Directional light
     const directionalLight = new Entity('sun');
     directionalLight.addComponent('light', {
       type: 'directional',
-      color: new Color(1, 0.95, 0.8),
-      intensity: 2,
+      color: new Color(0.8, 0.85, 1.0),
+      intensity: 1.5,
       castShadows: true,
       shadowBias: 0.3,
       normalOffsetBias: 0.02,
@@ -53,15 +116,86 @@ export class Scene {
     directionalLight.setPosition(5, 15, 5);
   }
 
+  createBoundaryWalls() {
+    const wallMat = new StandardMaterial();
+    wallMat.diffuse = new Color(0.6, 0.0, 0.0);
+    wallMat.emissive = new Color(0.3, 0.0, 0.0);
+    wallMat.emissiveIntensity = 0.3;
+    wallMat.transparent = true;
+    wallMat.opacity = 0.25;
+    wallMat.receiveShadows = true;
+    wallMat.update();
+
+    const wallEdgeMat = new StandardMaterial();
+    wallEdgeMat.diffuse = new Color(1.0, 0.15, 0.15);
+    wallEdgeMat.emissive = new Color(0.8, 0.1, 0.1);
+    wallEdgeMat.emissiveIntensity = 1.0;
+    wallEdgeMat.update();
+
+    // 4 boundary walls
+    const halfSize = 5;
+    const wallThickness = 0.1;
+    const wallHeight = 0.6;
+
+    const walls = [
+      { pos: [0, -0.2, -halfSize], scale: [10 + wallThickness * 2, wallHeight, wallThickness] },
+      { pos: [0, -0.2, halfSize], scale: [10 + wallThickness * 2, wallHeight, wallThickness] },
+      { pos: [-halfSize, -0.2, 0], scale: [wallThickness, wallHeight, 10 + wallThickness * 2] },
+      { pos: [halfSize, -0.2, 0], scale: [wallThickness, wallHeight, 10 + wallThickness * 2] }
+    ];
+
+    walls.forEach((w, i) => {
+      const wall = new Entity('wall' + i);
+      const render = wall.addComponent('render', { type: 'box' });
+      wall.setLocalScale(...w.scale);
+      wall.setPosition(...w.pos);
+      render.material = wallMat.clone();
+      render.material.update();
+      this.app.root.addChild(wall);
+    });
+  }
+
   setupPostProcessing() {
   }
 
   applyPostProcessing() {
     this.cameraFrame = new CameraFrame(this.app, this.cameraComponent);
     this.cameraFrame.rendering.toneMapping = TONEMAP_ACES;
-    this.cameraFrame.bloom.intensity = 0.02;
+    this.cameraFrame.bloom.intensity = 0.04;
     this.cameraFrame.taa.enabled = true;
     this.cameraFrame.taa.jitter = 1;
     this.cameraFrame.update();
+  }
+
+  createGlowingPlayer(color, emissiveColor) {
+    const entity = new Entity('glowingPlayer');
+    const render = entity.addComponent('render', { type: 'box' });
+    const material = new StandardMaterial();
+    material.diffuse = color;
+    material.emissive = emissiveColor;
+    material.emissiveIntensity = 0.8;
+    material.roughness = 0.3;
+    material.metalness = 0.7;
+    material.castShadows = true;
+    material.receiveShadows = true;
+    material.update();
+    render.material = material;
+    entity.setLocalScale(0.5, 0.5, 0.5);
+
+    // Wireframe edge overlay
+    const edges = new Entity('edges');
+    const edgeRender = edges.addComponent('render', { type: 'box' });
+    const edgeMat = new StandardMaterial();
+    edgeMat.diffuse = emissiveColor;
+    edgeMat.emissive = emissiveColor;
+    edgeMat.emissiveIntensity = 1.0;
+    edgeMat.update();
+    edgeRender.material = edgeMat;
+    edges.setLocalScale(0.52, 0.52, 0.52);
+    edges.render.material = edgeMat;
+
+    entity.addChild(edges);
+    this.app.root.addChild(entity);
+    return entity;
   }
 }
