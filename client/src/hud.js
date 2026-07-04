@@ -57,7 +57,9 @@ export class CooldownHUD {
     } else {
       const ratio = 1 - (cooldown / this.max);
       this.ring.setAttribute('stroke-dashoffset', this.circumference * (1 - ratio));
-      this.text.textContent = cooldown > 0.05 ? Math.ceil(cooldown) + 's' : '';
+      this.text.textContent = cooldown > 1
+        ? Math.ceil(cooldown) + 's'
+        : (cooldown > 0.02 ? cooldown.toFixed(2) + 's' : '');
       this.text.style.color = '#fff';
     }
   }
