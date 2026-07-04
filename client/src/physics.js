@@ -71,9 +71,10 @@ export class Physics {
     for (const proj of projectives) {
       let data = this.projectileEntities.get(proj.id);
       if (!data) {
-        const entity = this.createGlowingProjectile(proj.id);
+        const { entity, lightEntity } = this.createGlowingProjectile(proj.id);
         data = {
           entity,
+          lightEntity,
           spawnTime: proj.spawnTick * DT,
           startX: proj.startX,
           startY: proj.y,
@@ -190,8 +191,21 @@ export class Physics {
     mat.update();
     entity.render.material = mat;
     entity.setLocalScale(0.16, 0.16, 0.16);
+
+    // Intense point light for projectile glow
+    const lightEntity = new Entity('projLight' + id);
+    lightEntity.addComponent('light', {
+      type: 'point',
+      color: new Color(0.3, 1.0, 1.0),
+      intensity: 8,
+      range: 5,
+      shadow: false
+    });
+    lightEntity.setPosition(0, 0.15, 0);
+    entity.addChild(lightEntity);
+
     this.app.root.addChild(entity);
-    return entity;
+    return { entity, lightEntity };
   }
 
   destroyProjectile(id) {
@@ -226,6 +240,9 @@ export class Physics {
       const py = data.startY;
       const pz = data.startZ + data.dirZ * elapsed * data.speed;
       data.entity.setPosition(px, py, pz);
+      if (data.lightEntity) {
+        data.lightEntity.setPosition(px, py + 0.15, pz);
+      }
     }
   }
 }
