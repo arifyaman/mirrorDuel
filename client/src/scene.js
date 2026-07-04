@@ -1,4 +1,4 @@
-import { Color, Entity, StandardMaterial, Vec3 } from 'playcanvas';
+import { Color, Entity, StandardMaterial, Vec3, CameraFrame, TONEMAP_ACES } from 'playcanvas';
 
 export class Scene {
   constructor(app) {
