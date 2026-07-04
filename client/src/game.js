@@ -14,12 +14,10 @@ import { Scene } from './scene.js';
 import { Network } from './network.js';
 import { Physics } from './physics.js';
 import { Input } from './input.js';
-import { CooldownHUD } from './hud.js';
+import { SkillsHUD } from './skills-hud.js';
 import { GameTitle } from './game-title.js';
 
 const DT = 0.01667;
-const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
-const COOLDOWN_MAX = 3;
 
 export class Game {
   constructor() {
@@ -50,7 +48,6 @@ export class Game {
     this.input.init();
     this.myCooldown = 0;
     this._prevMyCooldown = 0;
-    this._hudCreated = false;
     this.gameTitle = new GameTitle();
   }
 
@@ -69,11 +66,8 @@ export class Game {
   }
 
   _onAppStarted() {
-    if (!this._hudCreated) {
-      this.hud = new CooldownHUD(COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
-      this.scene.applyPostProcessing();
-      this._hudCreated = true;
-    }
+    this.hud = new SkillsHUD();
+    this.scene.applyPostProcessing();
   }
 
   onStatus(state) {
@@ -103,19 +97,14 @@ export class Game {
 
   recreateHUD() {
     if (this.hud) this.hud.destroy();
-    this.hud = new CooldownHUD(COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+    this.hud = new SkillsHUD();
   }
 
   update(dt) {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
     if (this.gameTitle) this.gameTitle.update();
-    if (this.myCooldown > 0) {
-      this.myCooldown = Math.max(0, this.myCooldown - dt);
-    }
-    if (this.hud) {
-      this.hud.update(this.myCooldown, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
-    }
+    if (this.hud) this.hud.update();
     const moveX = (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
     const moveZ = (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
     const flags = this.input.fire ? 0x01 : 0;
