@@ -12,7 +12,7 @@ export class GameTitle {
     this.container = document.createElement('div');
     this.container.style.cssText = `
       position: fixed;
-      top: 16px;
+      top: 40px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
