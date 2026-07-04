@@ -198,7 +198,7 @@ export class Physics {
       type: 'point',
       color: new Color(0.3, 1.0, 1.0),
       intensity: 25,
-      range: 2.5,
+      range: 0.2,
       shadow: false
     });
     lightEntity.setPosition(0, 0.15, 0);
