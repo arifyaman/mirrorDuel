@@ -50,17 +50,25 @@ func (s *GameSession) TickStep() {
 			activatedIDs[player.ID] = true
 			player.JustDashed = false
 		}
+		if player.JustShielded {
+			activatedIDs[player.ID] = true
+			player.JustShielded = false
+		}
 	}
 
-	// Mirror cooldown reduction: when ANY skill activates, reduce ALL of opponent's cooldowns by 50%
+	// Mirror cooldown reduction: when ANY skill activates, reduce opponent's cooldowns
 	for activatedID := range activatedIDs {
 		for _, player := range s.Players {
 			if player.ID != activatedID {
+				// Fire and dash reduce ALL of opponent's cooldowns
 				if player.Cooldown > 0 {
 					player.Cooldown *= 0.5
 				}
 				if player.DashCooldown > 0 {
 					player.DashCooldown *= 0.5
+				}
+				if player.ShieldCooldown > 0 {
+					player.ShieldCooldown *= 0.5
 				}
 			}
 		}
@@ -117,6 +125,12 @@ func (s *GameSession) TickStep() {
 			dz := pz - player.Z
 			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
 			if dist < hitRadius {
+				if player.ShieldActive {
+					fmt.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield\n",
+						p.ID, p.PlayerOwner, player.ID)
+					hit = true
+					break
+				}
 				player.Health -= s.Config.Projectile.Damage
 				if player.Health < 0 {
 					player.Health = 0
@@ -146,14 +160,15 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 	players = make([]network.PlayerSnapshot, 0, len(s.Players))
 	for _, p := range s.Players {
 		players = append(players, network.PlayerSnapshot{
-			ID:           uint8(p.ID),
-			X:            p.X,
-			Y:            p.Y,
-			Z:            p.Z,
-			Angle:        p.Angle,
-			Cooldown:     p.Cooldown,
-			Health:       p.Health,
-			DashCooldown: p.DashCooldown,
+			ID:             uint8(p.ID),
+			X:              p.X,
+			Y:              p.Y,
+			Z:              p.Z,
+			Angle:          p.Angle,
+			Cooldown:       p.Cooldown,
+			Health:         p.Health,
+			DashCooldown:   p.DashCooldown,
+			ShieldCooldown: p.ShieldCooldown,
 		})
 	}
 

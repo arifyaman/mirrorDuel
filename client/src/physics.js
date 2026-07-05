@@ -16,7 +16,6 @@ export class Physics {
     this._shieldEntity = null;
     this._shieldMat = null;
     this._shieldTime = 0;
-    this._shieldOpenStart = 0;
     this.app = app;
   }
 
@@ -507,6 +506,7 @@ export class Physics {
     entity.addComponent('render', { type: 'sphere' });
     entity.render.meshInstances[0].material = mat;
     entity.setLocalScale(1.4, 1.4, 1.4);
+    entity.enabled = false;
     this.app.root.addChild(entity);
 
     // Tuning parameters — adjust these
@@ -521,26 +521,45 @@ export class Physics {
 
     this._shieldEntity = entity;
     this._shieldMat = mat;
-    this._shieldOpenStart = this._shieldTime;
     return { entity, mat };
   }
 
-  updateShield(pos, cameraPos, dt, playerAngle) {
+  updateShield(pos, cameraPos, dt, playerAngle, shieldCooldown) {
     if (!this._shieldEntity) return;
     this._shieldTime += dt;
     this._shieldEntity.setPosition(pos.x, pos.y, pos.z);
-    if (this._shieldMat) {
-      this._shieldMat.setParameter('uTime', this._shieldTime);
-      this._shieldMat.setParameter('uCameraPos', [cameraPos.x, cameraPos.y, cameraPos.z]);
-      this._shieldMat.setParameter('uPlayerPos', [pos.x, pos.y, pos.z]);
-      this._shieldMat.setParameter('uPlayerAngle', playerAngle || 0);
+    if (!this._shieldMat) return;
 
-      const openDuration = .5;
-      const elapsed = this._shieldTime - this._shieldOpenStart;
-      const t = Math.min(elapsed / openDuration, 1);
-      const eased = t * (2 - t);
-      this._shieldMat.setParameter('uConeAngle', eased * 50 * Math.PI / 180);
+    this._shieldMat.setParameter('uTime', this._shieldTime);
+    this._shieldMat.setParameter('uCameraPos', [cameraPos.x, cameraPos.y, cameraPos.z]);
+    this._shieldMat.setParameter('uPlayerPos', [pos.x, pos.y, pos.z]);
+    this._shieldMat.setParameter('uPlayerAngle', playerAngle || 0);
+
+    const maxConeAngle = 50 * Math.PI / 180;
+    const activeDuration = 1.0;
+    const openDuration = 0.3;
+    const closeDuration = 0.3;
+
+    if (shieldCooldown <= 0 || 7 - shieldCooldown >= activeDuration) {
+      this._shieldEntity.enabled = false;
+      return;
     }
+
+    this._shieldEntity.enabled = true;
+    const t = (7 - shieldCooldown) / activeDuration;
+
+    let coneFrac;
+    if (t < openDuration / activeDuration) {
+      coneFrac = (t * activeDuration / openDuration);
+      coneFrac = coneFrac * (2 - coneFrac);
+    } else if (t > 1 - closeDuration / activeDuration) {
+      const closeT = (t - (1 - closeDuration / activeDuration)) * activeDuration / closeDuration;
+      coneFrac = 1 - Math.min(closeT, 1) * (2 - Math.min(closeT, 1));
+    } else {
+      coneFrac = 1;
+    }
+
+    this._shieldMat.setParameter('uConeAngle', coneFrac * maxConeAngle);
   }
 
   shieldHit() {

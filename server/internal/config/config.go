@@ -13,6 +13,7 @@ type Config struct {
 	TurnSpeed     float32
 	Projectile    ProjectileConfig
 	Dash          DashConfig
+	Shield        ShieldConfig
 }
 
 // DashConfig holds dash skill settings.
@@ -21,6 +22,12 @@ type DashConfig struct {
 	Distance     float32
 	Duration     int     // ticks
 	EaseOutStart float32 // 0-1, fraction of dash when deceleration begins
+}
+
+// ShieldConfig holds shield skill settings.
+type ShieldConfig struct {
+	Cooldown       float32 // 7 seconds
+	ActiveDuration float32 // 1 second
 }
 
 // ProjectileConfig mirrors the skills.projectile config.
@@ -58,6 +65,10 @@ func Default() *Config {
 			Distance: 4,
 			Duration: 20,
 			EaseOutStart: 0.2,
+		},
+		Shield: ShieldConfig{
+			Cooldown:       7,
+			ActiveDuration: 1,
 		},
 	}
 }

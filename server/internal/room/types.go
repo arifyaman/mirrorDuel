@@ -39,6 +39,7 @@ type Player struct {
 
 	JustFired      bool
 	JustDashed     bool
+	JustShielded   bool
 	AimX           float32
 	AimZ           float32
 	BufferedInputs []network.PlayerInput
@@ -52,6 +53,9 @@ type Player struct {
 	DashStartZ    float32
 	DashTargetX   float32
 	DashTargetZ   float32
+
+	ShieldCooldown float32
+	ShieldActive   bool
 }
 
 // NewPlayer creates a new Player.
@@ -105,6 +109,13 @@ func (p *Player) ProcessInputs(dt float32) {
 			p.DashCooldown = 0
 		}
 	}
+	if p.ShieldCooldown > 0 {
+		p.ShieldCooldown -= dt
+		if p.ShieldCooldown < 0 {
+			p.ShieldCooldown = 0
+		}
+	}
+	p.processShield()
 
 	// Check for projectile activation (flags & 0x01)
 	if last.Flags&0x01 != 0 && p.Cooldown <= 0 && !p.IsDashing {
@@ -114,6 +125,11 @@ func (p *Player) ProcessInputs(dt float32) {
 	// Check for dash activation (flags & 0x02)
 	if last.Flags&0x02 != 0 && p.DashCooldown <= 0 && !p.IsDashing {
 		p.startDash()
+	}
+
+	// Check for shield activation (flags & 0x04)
+	if last.Flags&0x04 != 0 && p.ShieldCooldown <= 0 && !p.IsDashing {
+		p.startShield()
 	}
 
 	// Clear buffer
@@ -256,5 +272,21 @@ func (p *Player) processDash(dt float32) {
 		p.IsDashing = false
 		p.TargetX = p.X
 		p.TargetZ = p.Z	
+	}
+}
+
+func (p *Player) startShield() {
+	p.JustShielded = true
+	p.ShieldCooldown = p.Config.Shield.Cooldown
+	p.ShieldActive = true
+}
+
+func (p *Player) processShield() {
+	if !p.ShieldActive {
+		return
+	}
+	elapsed := p.Config.Shield.Cooldown - p.ShieldCooldown
+	if elapsed >= p.Config.Shield.ActiveDuration {
+		p.ShieldActive = false
 	}
 }

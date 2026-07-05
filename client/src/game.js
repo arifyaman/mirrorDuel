@@ -50,6 +50,7 @@ export class Game {
     this.input.init();
     this.myCooldown = 0;
     this.myDashCooldown = 0;
+    this.myShieldCooldown = 0;
     this._prevMyCooldown = 0;
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
@@ -97,6 +98,7 @@ export class Game {
     if (myPlayer) {
       this.myCooldown = Math.max(0, myPlayer.cooldown);
       this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
+      this.myShieldCooldown = Math.max(0, myPlayer.shieldCooldown);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
       this._myPlayerAngle = myPlayer.angle;
@@ -145,7 +147,7 @@ export class Game {
     this.scene.setPlayerPositions(players.map(p => ({ x: p.x, z: p.z })));
 
     this.physics.applySnapshot(players, projectiles);
-    this.ui.update(players, [this.myCooldown, this.myDashCooldown, 0]);
+    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7]);
   }
 
   recreateHUD() {
@@ -168,7 +170,8 @@ export class Game {
         { x: this._myPlayerPos.x, y: -0.2, z: this._myPlayerPos.z },
         { x: camPos.x, y: camPos.y, z: camPos.z },
         dt,
-        this._myPlayerAngle || 0
+        this._myPlayerAngle || 0,
+        this.myShieldCooldown
       );
     }
     if (this.myCooldown > 0) {
@@ -176,6 +179,9 @@ export class Game {
     }
     if (this.myDashCooldown > 0) {
       this.myDashCooldown = Math.max(0, this.myDashCooldown - dt);
+    }
+    if (this.myShieldCooldown > 0) {
+      this.myShieldCooldown = Math.max(0, this.myShieldCooldown - dt);
     }
     const myId = this.network.myPlayerId;
     const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
@@ -185,6 +191,7 @@ export class Game {
     if (!dead) {
       if (this.input.fire) flags |= 0x01;
       if (this.input.dash) flags |= 0x02;
+      if (this.input.shield) flags |= 0x04;
     }
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
   }

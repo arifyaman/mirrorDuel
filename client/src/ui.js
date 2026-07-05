@@ -5,6 +5,7 @@ export class UI {
     this.app = app;
     this.circumference = circumference;
     this.max = max;
+    this.maxPerSkill = [3, 7, 7];
     this.healthBarEntities = new Map();
     this.rings = [];
     this.texts = [];
@@ -13,9 +14,9 @@ export class UI {
     this._createFlashOverlay();
   }
 
-  update(players, cooldowns) {
+  update(players, cooldowns, maxPerSkill) {
     this._updateHealthBars(players);
-    this._updateCooldowns(cooldowns);
+    this._updateCooldowns(cooldowns, maxPerSkill);
   }
 
   _updateHealthBars(players) {
@@ -229,22 +230,23 @@ export class UI {
     document.body.appendChild(this.container);
   }
 
-  _updateCooldowns(cooldowns) {
+  _updateCooldowns(cooldowns, maxPerSkill) {
     if (!this.rings.length) return;
     for (let i = 0; i < 3; i++) {
       const ring = this.rings[i];
       const label = this.texts[i];
       if (!ring || !label) continue;
-      const cooldown = cooldowns[i] || 0;
-      if (cooldown <= 0) {
+      const cd = cooldowns[i] || 0;
+      const max = (maxPerSkill && maxPerSkill[i]) || this.max;
+      if (cd <= 0) {
         ring.setAttribute('stroke-dashoffset', 0);
         label.textContent = i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield');
       } else {
-        const ratio = 1 - (cooldown / this.max);
+        const ratio = 1 - (cd / max);
         ring.setAttribute('stroke-dashoffset', this.circumference * (1 - ratio));
-        label.textContent = cooldown > 1
-          ? Math.ceil(cooldown) + 's'
-          : (cooldown > 0.02 ? cooldown.toFixed(2) + 's' : (i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield')));
+        label.textContent = cd > 1
+          ? Math.ceil(cd) + 's'
+          : (cd > 0.02 ? cd.toFixed(2) + 's' : (i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield')));
       }
     }
   }
