@@ -308,31 +308,51 @@ export class Physics {
   }
 
   createDashTrail(x1, y1, z1, x2, y2, z2) {
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2;
-    const mz = (z1 + z2) / 2;
     const dx = x2 - x1;
     const dz = z2 - z1;
     const len = Math.sqrt(dx * dx + dz * dz);
     if (len < 0.01) return;
-    const angle = Math.atan2(dx, dz) * (180 / Math.PI);
+    // Perpendicular vector for lateral offset
+    const nx = -dz / len;
+    const nz = dx / len;
+    const now = performance.now();
+    const duration = 600;
 
-    const e = new Entity('dashTrail');
-    e.addComponent('render', { type: 'box' });
-    const mat = new StandardMaterial();
-    mat.diffuse = new Color(0.6, 0.8, 1);
-    mat.emissive = new Color(0.3, 0.6, 1);
-    mat.emissiveIntensity = 2.0;
-    mat.opacity = 0.7;
-    mat.blendType = 2;
-    mat.alphaWrite = false;
-    mat.update();
-    e.render.material = mat;
-    e.setLocalScale(0.12, 0.02, len);
-    e.setPosition(mx, my, mz);
-    e.setEulerAngles(0, angle, 0);
-    this.app.root.addChild(e);
-    this._dashTrails.push({ entity: e, createdAt: performance.now(), duration: 400 });
+    // Place puffs along the segment with random offsets
+    const puffCount = 5 + Math.floor(len * 3);
+    for (let i = 0; i < puffCount; i++) {
+      const t = i / puffCount;
+      const lt = t + (Math.random() - 0.5) * 0.15;
+      const bx = x1 + dx * lt + nx * (Math.random() - 0.5) * 0.25;
+      const by = y1 + (Math.random() - 0.5) * 0.04;
+      const bz = z1 + dz * lt + nz * (Math.random() - 0.5) * 0.25;
+
+      const puff = new Entity('dashPuff');
+      puff.addComponent('render', { type: 'sphere' });
+      const mat = new StandardMaterial();
+      mat.diffuse = new Color(0.3, 0.7, 1);
+      mat.emissive = new Color(0.2, 0.5, 1);
+      mat.emissiveIntensity = 2.0;
+      mat.opacity = 0.6;
+      mat.blendType = 2;
+      mat.alphaWrite = false;
+      mat.update();
+      puff.render.material = mat;
+      const s = 0.04 + Math.random() * 0.08;
+      puff.setLocalScale(s, s, s);
+      puff.setPosition(bx, by, bz);
+      this.app.root.addChild(puff);
+      const puffDur = duration + Math.random() * 200;
+      this._dashTrails.push({
+        entity: puff,
+        createdAt: now,
+        duration: puffDur,
+        type: 'puff',
+        driftX: (Math.random() - 0.5) * 0.3,
+        driftZ: (Math.random() - 0.5) * 0.3,
+        baseScale: s,
+      });
+    }
   }
 
   updateDashTrails() {
@@ -348,8 +368,13 @@ export class Physics {
       }
       const alpha = 1 - elapsed / t.duration;
       const mat = t.entity.render.material;
-      mat.opacity = alpha * 0.7;
-      mat.emissiveIntensity = alpha * 2.0;
+      if (t.type === 'puff') {
+        mat.opacity = alpha * alpha * 0.6;
+        mat.emissiveIntensity = alpha * 2.5;
+        t.entity.translate(t.driftX * 0.016, 0.02 * 0.016, t.driftZ * 0.016);
+        const grow = 1 + (1 - alpha) * 1.5;
+        t.entity.setLocalScale(t.baseScale * grow, t.baseScale * grow, t.baseScale * grow);
+      }
       mat.update();
     }
   }

@@ -54,7 +54,7 @@ func Default() *Config {
 			BurstDuration: 1.5,
 		},
 		Dash: DashConfig{
-			Cooldown: 7,
+			Cooldown: 2,
 			Distance: 4,
 			Duration: 20,
 			EaseOutStart: 0.2,
