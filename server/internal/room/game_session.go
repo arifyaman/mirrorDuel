@@ -153,6 +153,12 @@ func (s *GameSession) TickStep() {
 						break
 					}
 				}
+				if player.IsDashing {
+					fmt.Printf("[DODGE] projectile %d (player %d) dodged by player %d's dash\n",
+						p.ID, p.PlayerOwner, player.ID)
+					hit = true
+					break
+				}
 				player.Health -= s.Config.Projectile.Damage
 				if player.Health < 0 {
 					player.Health = 0
