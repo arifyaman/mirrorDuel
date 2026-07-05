@@ -1,4 +1,5 @@
 node_modules/
 dist/
 *.tsbuildinfo
-server/server-go/main
+server/main
+server/bin/

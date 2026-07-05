@@ -67,11 +67,12 @@ mirrorDuel/
 │       ├── hud.js                  # 3-skill cooldown HUD with SVG icons and triangle layout
 │       └── game-title.js           # Title screen animation
 └── server/
-    └── server-go/                  # Go WebTransport/QUIC game server
-        ├── cmd/server/             # Entry: WebTransport server, HTTP health check, game loop
-        ├── internal/room/          # GameSession, Player, projectile logic, matchmaking
-        ├── internal/network/       # Session, length-prefixed binary protocol encode/decode
-        └── internal/config/        # Server configuration (FloorSize:20, Speed:13.5, MaxReach:8)
+    ├── cmd/server/             # Entry: WebTransport server, HTTP health check, game loop
+    ├── internal/
+    │   ├── room/               # GameSession, Player, projectile logic, matchmaking
+    │   ├── network/            # Session, length-prefixed binary protocol encode/decode
+    │   └── config/             # Server configuration (FloorSize:20, Speed:13.5, MaxReach:8)
+    └── tls/                    # Self-signed TLS certificates for WebTransport
 ```
 
 ## Client Architecture
@@ -167,7 +168,7 @@ mirrorDuel/
 
 ### Run Server (Go + WebTransport/QUIC)
 ```bash
-cd server/server-go && go build -o main ./cmd/server/ && ./main
+cd server && go build -o main ./cmd/server/ && ./main
 ```
 - WebTransport: `https://localhost:4433/wt`
 - Health: `http://localhost:8081/health`

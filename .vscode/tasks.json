@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "go build -o main ./cmd/server/ && ./main",
       "options": {
-        "cwd": "${workspaceFolder}/server/server-go"
+        "cwd": "${workspaceFolder}/server"
       },
       "problemMatcher": [],
       "presentation": {
