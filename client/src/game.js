@@ -53,6 +53,7 @@ export class Game {
     this._prevMyCooldown = 0;
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
+    this._myPlayerAngle = 0;
     this._cameraTarget = { x: 0, z: 0 };
     this.gameTitle = new GameTitle();
     this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
@@ -74,6 +75,11 @@ export class Game {
 
   _onAppStarted() {
     this.scene.applyPostProcessing();
+    try {
+      this.physics.createShield([0.1, 0.5, 1.0]);
+    } catch (e) {
+      console.error('Shield creation failed:', e);
+    }
   }
 
   onStatus(state) {
@@ -93,6 +99,7 @@ export class Game {
       this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
+      this._myPlayerAngle = myPlayer.angle;
     }
 
     // Detect spell fire: cooldown jumps from 0 to >0
@@ -156,6 +163,13 @@ export class Game {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;
       this.scene.cameraTargetMid.z = this._cameraTarget.z;
       this.scene.updateCamera(dt);
+      const camPos = this.scene.cameraComponent.entity.getPosition();
+      this.physics.updateShield(
+        { x: this._myPlayerPos.x, y: -0.2, z: this._myPlayerPos.z },
+        { x: camPos.x, y: camPos.y, z: camPos.z },
+        dt,
+        this._myPlayerAngle || 0
+      );
     }
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);

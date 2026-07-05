@@ -1,4 +1,4 @@
-import { Color, Entity, StandardMaterial, Vec3 } from 'playcanvas';
+import { Color, Entity, ShaderMaterial, StandardMaterial, Vec3, BLEND_NORMAL, CULLFACE_NONE, SEMANTIC_POSITION, SEMANTIC_NORMAL } from 'playcanvas';
 
 const DT = 0.01667;
 
@@ -13,6 +13,10 @@ export class Physics {
     this._playerFlash = new Map();
     this._dashTrails = [];
     this._prevPlayerPos = new Map();
+    this._shieldEntity = null;
+    this._shieldMat = null;
+    this._shieldTime = 0;
+    this._shieldOpenStart = 0;
     this.app = app;
   }
 
@@ -359,6 +363,189 @@ export class Physics {
       t.entity.translate(t.driftX * alpha * 0.016, t.driftY * alpha * 0.016, t.driftZ * alpha * 0.016);
       const s = 0.5 * (0.3 + alpha * 0.7);
       t.entity.setLocalScale(s, s, s);
+    }
+  }
+
+  createShield(color) {
+    const vshader = `
+      attribute vec3 aPosition;
+      attribute vec3 aNormal;
+
+      uniform mat4 matrix_model;
+      uniform mat4 matrix_viewProjection;
+      uniform mat3 matrix_normal;
+
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vNormalObj;
+
+      void main(void) {
+          vec4 posW = matrix_model * vec4(aPosition, 1.0);
+          vPositionW = posW.xyz;
+          vNormalW = normalize(matrix_normal * aNormal);
+          vNormalObj = normalize(aNormal);
+          gl_Position = matrix_viewProjection * posW;
+      }
+    `;
+
+    const fshader = `
+      precision highp float;
+
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vNormalObj;
+
+      uniform vec3 uColor;
+      uniform vec3 uCameraPos;
+      uniform float uTime;
+      uniform float uCellScale;
+      uniform float uCrackWidth;
+      uniform float uFresnelPower;
+      uniform float uPulseSpeed;
+      uniform float uHitTime;
+      uniform vec3 uPlayerPos;
+      uniform float uPlayerAngle;
+      uniform float uConeAngle;
+
+      vec3 hash3(vec3 p) {
+          p = vec3(
+              dot(p, vec3(127.1, 311.7, 74.7)),
+              dot(p, vec3(269.5, 183.3, 246.1)),
+              dot(p, vec3(113.5, 271.9, 124.6))
+          );
+          return fract(sin(p) * 43758.5453123);
+      }
+
+      vec3 voronoi(vec3 x) {
+          vec3 p = floor(x);
+          vec3 f = fract(x);
+          float minDist1 = 8.0;
+          float minDist2 = 8.0;
+          vec3 minPoint = vec3(0.0);
+          for (int i = -1; i <= 1; i++) {
+            for (int j = -1; j <= 1; j++) {
+              for (int k = -1; k <= 1; k++) {
+                vec3 b = vec3(float(i), float(j), float(k));
+                vec3 randOff = hash3(p + b);
+                vec3 r = b + randOff - f;
+                float d = dot(r, r);
+                if (d < minDist1) {
+                  minDist2 = minDist1;
+                  minDist1 = d;
+                  minPoint = p + b + randOff;
+                } else if (d < minDist2) {
+                  minDist2 = d;
+                }
+              }
+            }
+          }
+          return vec3(sqrt(minDist1), sqrt(minDist2),
+                      fract(sin(dot(minPoint, vec3(12.9898, 78.233, 45.164))) * 43758.5453));
+      }
+
+      void main(void) {
+          vec3 N = normalize(vNormalW);
+          vec3 V = normalize(uCameraPos - vPositionW);
+          float ndv = abs(dot(N, V));
+          float fresnel = pow(1.0 - ndv, uFresnelPower);
+
+          vec3 samplePos = normalize(vNormalObj) * uCellScale + vec3(0.0, uTime * 1.2, uTime * 0.6);
+          vec3 vr = voronoi(samplePos);
+          float edgeDist = vr.y - vr.x;
+
+          float crack = smoothstep(0.0, uCrackWidth, edgeDist);
+          float cellBrightness = mix(0.15, 1.0, vr.z * 0.6 + 0.4);
+
+          vec3 darkCol = uColor * 0.03;
+          vec3 brightCol = uColor * cellBrightness * 1.2;
+          vec3 baseCol = mix(darkCol, brightCol, crack);
+
+          float pulse = 0.92 + 0.08 * sin(uTime * uPulseSpeed * 3.14159);
+
+          float hitAge = uTime - uHitTime;
+          float hitPulse = 0.0;
+          if (hitAge >= 0.0 && hitAge < 1.2) {
+              hitPulse = (1.0 - hitAge / 1.2) * 1.5;
+          }
+
+          vec3 rimColor = mix(uColor, vec3(1.0, 0.95, 0.98), 0.25) * (fresnel * 0.7 + hitPulse * 0.5);
+
+          vec3 finalColor = baseCol * pulse + rimColor * 0.8;
+          float alpha = clamp(crack * 0.55 + fresnel * 0.55 + hitPulse * 0.5 + 0.22, 0.0, 1.0);
+
+          // Cone culling with voronoi-jittered boundary
+          vec3 dir = normalize(vPositionW - uPlayerPos);
+          vec2 dirXZ = normalize(dir.xz);
+          vec2 facing = vec2(sin(uPlayerAngle), cos(uPlayerAngle));
+          float dp = dot(dirXZ, facing);
+          float coneDot = cos(uConeAngle);
+
+          float cellJitter = (vr.z - 0.5) * 0.15;
+          float crackJitter = (1.0 - smoothstep(0.0, uCrackWidth * 2.0, edgeDist)) * 0.06;
+          float localCone = coneDot + cellJitter - crackJitter;
+
+          float coneAlpha = smoothstep(localCone - 0.06, localCone + 0.06, dp);
+          alpha *= coneAlpha;
+          if (alpha < 0.01) discard;
+
+          gl_FragColor = vec4(finalColor, alpha);
+      }
+    `;
+
+    const mat = new ShaderMaterial({
+      uniqueName: 'voronoiShield',
+      attributes: { aPosition: SEMANTIC_POSITION, aNormal: SEMANTIC_NORMAL },
+      vertexGLSL: vshader,
+      fragmentGLSL: fshader,
+    });
+    mat.blendType = BLEND_NORMAL;
+    mat.depthWrite = false;
+    mat.cull = CULLFACE_NONE;
+    mat.update();
+
+    const entity = new Entity('shield');
+    entity.addComponent('render', { type: 'sphere' });
+    entity.render.meshInstances[0].material = mat;
+    entity.setLocalScale(1.4, 1.4, 1.4);
+    this.app.root.addChild(entity);
+
+    // Tuning parameters — adjust these
+    mat.setParameter('uColor', color);
+    mat.setParameter('uCellScale', 3.0);
+    mat.setParameter('uCrackWidth', 0.06);
+    mat.setParameter('uFresnelPower', 2.5);
+    mat.setParameter('uPulseSpeed', 0.5);
+    mat.setParameter('uHitTime', -10);
+    mat.setParameter('uConeAngle', 0);
+    mat.setParameter('uPlayerAngle', 0);
+
+    this._shieldEntity = entity;
+    this._shieldMat = mat;
+    this._shieldOpenStart = this._shieldTime;
+    return { entity, mat };
+  }
+
+  updateShield(pos, cameraPos, dt, playerAngle) {
+    if (!this._shieldEntity) return;
+    this._shieldTime += dt;
+    this._shieldEntity.setPosition(pos.x, pos.y, pos.z);
+    if (this._shieldMat) {
+      this._shieldMat.setParameter('uTime', this._shieldTime);
+      this._shieldMat.setParameter('uCameraPos', [cameraPos.x, cameraPos.y, cameraPos.z]);
+      this._shieldMat.setParameter('uPlayerPos', [pos.x, pos.y, pos.z]);
+      this._shieldMat.setParameter('uPlayerAngle', playerAngle || 0);
+
+      const openDuration = .5;
+      const elapsed = this._shieldTime - this._shieldOpenStart;
+      const t = Math.min(elapsed / openDuration, 1);
+      const eased = t * (2 - t);
+      this._shieldMat.setParameter('uConeAngle', eased * 50 * Math.PI / 180);
+    }
+  }
+
+  shieldHit() {
+    if (this._shieldMat) {
+      this._shieldMat.setParameter('uHitTime', this._shieldTime);
     }
   }
 
