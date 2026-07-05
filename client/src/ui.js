@@ -27,6 +27,10 @@ export class UI {
         bar = this._createHealthBar(p.id);
         this.healthBarEntities.set(p.id, bar);
       }
+      const dead = p.health <= 0;
+      bar.bg.enabled = !dead;
+      bar.fill.enabled = !dead;
+      if (dead) continue;
       const ratio = Math.max(0, Math.min(1, p.health / 100));
       const fullWidth = 1.6;
       bar.fill.setLocalScale(fullWidth * ratio, 0.08, 0.08);
