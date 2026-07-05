@@ -17,7 +17,7 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
   - Formula: `speedMultiplier = 0.75 + 0.25 * alignment` where alignment is dot product of moveDir and playerForward
 
 ### Projectile Skill
-- **Activation**: Left mouse click
+- **Activation**: R key (flag 0x01) (flag 0x01)
 - **Cooldown**: 3 seconds
 - **Projectile Properties**:
   - Travel distance: 8 units
@@ -25,12 +25,27 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
   - Travel time: ~0.59 seconds
 - **Direction**: Towards mouse cursor position on ground plane (y=-0.5)
 
+### Dash Skill
+- **Activation**: Spacebar (flag 0x02)
+- **Cooldown**: 7 seconds (separate from fire cooldown)
+- **Distance**: 4 units in facing direction
+- **Duration**: 20 ticks (~333ms) with ease-out curve
+- **Curve**: Piecewise ease-out — constant speed until `EaseOutStart` (configurable, default 0.5), then ease-out quad deceleration
+- **Movement**: Player can still aim/rotate and queue WASD movement while dashing (updates angle + TargetX/Z for post-dash continuation)
+- **Trail Visual**: Ghostly after-images — player-colored semi-transparent boxes at each position along path, drifting upward+outward with velocity decay, shrinking and fading over 600ms
+- **Server authoritative**: Dash start, interpolation, and end all computed on server; client receives snapshots
+
+### Mirror Cooldown Mechanic
+- When ANY skill activates (fire OR dash), ALL cooldowns (fire + dash) on the opponent are reduced by 50%
+- Creates the core gameplay loop: aggressive play pressures opponent's cooldowns
+
 ### HUD
 - **3 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
   - Fire (Skill 1): Crosshair icon, red ring, 3s cooldown
-  - Dash (Skill 2): Lightning bolt icon, gold ring, placeholder
+  - Dash (Skill 2): Lightning bolt icon, gold ring, 7s cooldown
   - Shield (Skill 3): Shield icon with cross, blue ring, placeholder
-- **Cooldown Display**: Animated ring, text shows time remaining or "READY" when available
+- **Cooldown Display**: Animated ring, text shows time remaining or skill name when available
+- **Health Bars**: 3D world-space bars above each player, hidden when dead
 
 ### Scene Elements
 - **Floor**: Gray box (20x0.05x20) at y=-0.5, diffuse color (0.12, 0.12, 0.18)
@@ -64,7 +79,7 @@ mirrorDuel/
 │       ├── input.js                # WASD keys, mouse tracking, raycasting
 │       ├── game.js                 # Main game loop, network callbacks, camera follow logic
 │       ├── network.js              # Network session tracking
-│       ├── hud.js                  # 3-skill cooldown HUD with SVG icons and triangle layout
+│       ├── ui.js                   # 3D health bars, 3-skill cooldown HUD with SVG icons and screen flash
 │       └── game-title.js           # Title screen animation
 └── server/
     ├── cmd/server/             # Entry: WebTransport server, HTTP health check, game loop
@@ -80,7 +95,7 @@ mirrorDuel/
 ### `index.html`
 - **Scene**: Floor with grid, camera, directional light, TAA with bloom
 - **Render Pipeline**: TAA (jitter=1), ACES tone mapping, bloom (0.1)
-- **Input**: Key tracking (WASD), mouse raycasting to ground plane
+- **Input**: Key tracking (WASD, R for fire, Space for dash), mouse raycasting to ground plane
 - **Game Loop**: Sends inputs to server, receives snapshots, updates HUD
 - **Rendering**: Receives server snapshots, creates/updates player and projectile entities
 
@@ -112,10 +127,11 @@ mirrorDuel/
 
 ### `internal/room/game_session.go`
 - **GameSession**: Manages 1v1 room, tick loop, projectile state
-- **Player**: Buffered inputs, movement (camera-relative + speed modulation), angle (from mouse), cooldown
+- **Player**: Buffered inputs, movement (camera-relative + speed modulation), angle (from mouse), cooldown, dash state
 - **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
+- **Mirror Cooldowns**: When any player activates fire or dash, reduce opponent's fire AND dash cooldowns by 50%
 
 ### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
@@ -125,7 +141,7 @@ mirrorDuel/
 
 ### `internal/network/protocol.go`
 - **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
-- **Encoding**: `encodeStateSnapshot()` - 21 bytes per player, 31 bytes per projectile
+- **Encoding**: `encodeStateSnapshot()` - 29 bytes per player, 31 bytes per projectile
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
 - **Read Loop**: Handles multiple coalesced messages per read
 
@@ -135,8 +151,9 @@ mirrorDuel/
 - **Read Loop**: Accumulates data, parses messages in loop
 
 ### `internal/config/config.go`
-- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75)
+- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
+- **Dash**: Cooldown(7), Distance(4), Duration(20), EaseOutStart(0.5)
 
 ## Network Protocol
 
@@ -153,6 +170,8 @@ mirrorDuel/
 | 1 | JOIN_ROOM | variable | `[nameLen: 1][name: bytes]` |
 | 2 | PLAYER_INPUT | 13 | `[tick: u16][moveX: i8][moveZ: i8][mouseX: f32][mouseY: f32][flags: u8]` |
 
+`flags`: `0x01` = fire, `0x02` = dash
+
 ### Server → Client
 | Type | Name | Size | Format |
 |------|------|------|--------|
@@ -161,7 +180,7 @@ mirrorDuel/
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
-- **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32]` (21 bytes)
+- **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32]` (29 bytes)
 - **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
 
 ## Development Workflow
