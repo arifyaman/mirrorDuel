@@ -1,15 +1,89 @@
-export class CooldownHUD {
-  constructor(circumference, max) {
+import { Color, Entity, StandardMaterial } from 'playcanvas';
+
+export class UI {
+  constructor(app, circumference, max) {
+    this.app = app;
     this.circumference = circumference;
     this.max = max;
-    this.container = null;
+    this.healthBarEntities = new Map();
     this.rings = [];
     this.texts = [];
-    this.numSkills = 3;
-    this.createElements();
+    this.container = null;
+    this._createCooldownElements();
   }
 
-  createElements() {
+  update(players, cooldowns) {
+    this._updateHealthBars(players);
+    this._updateCooldowns(cooldowns);
+  }
+
+  _updateHealthBars(players) {
+    const activeIds = new Set();
+    for (const p of players) {
+      activeIds.add(p.id);
+      let bar = this.healthBarEntities.get(p.id);
+      if (!bar) {
+        bar = this._createHealthBar(p.id);
+        this.healthBarEntities.set(p.id, bar);
+      }
+      const ratio = Math.max(0, Math.min(1, p.health / 100));
+      const fullWidth = 1.6;
+      bar.fill.setLocalScale(fullWidth * ratio, 0.08, 0.08);
+      bar.bg.setPosition(p.x, p.y + 1.4, p.z);
+      bar.fill.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.4, p.z);
+      const fillMat = bar.fill.render.material;
+      if (ratio > 0.6) {
+        fillMat.diffuse = new Color(0.0, 0.85, 0.1);
+        fillMat.emissive = new Color(0.0, 0.8, 0.1);
+      } else if (ratio > 0.3) {
+        fillMat.diffuse = new Color(0.85, 0.7, 0.0);
+        fillMat.emissive = new Color(0.8, 0.6, 0.0);
+      } else {
+        fillMat.diffuse = new Color(0.9, 0.1, 0.0);
+        fillMat.emissive = new Color(0.9, 0.0, 0.0);
+      }
+      fillMat.update();
+    }
+    for (const [id, bar] of this.healthBarEntities) {
+      if (!activeIds.has(id)) {
+        if (bar.bg.parent) bar.bg.parent.removeChild(bar.bg);
+        bar.bg.destroy();
+        if (bar.fill.parent) bar.fill.parent.removeChild(bar.fill);
+        bar.fill.destroy();
+        this.healthBarEntities.delete(id);
+      }
+    }
+  }
+
+  _createHealthBar(id) {
+    const bg = new Entity('hpBg' + id);
+    bg.addComponent('render', { type: 'box' });
+    const bgMat = new StandardMaterial();
+    bgMat.diffuse = new Color(0.15, 0.15, 0.15);
+    bgMat.emissive = new Color(0.1, 0.1, 0.1);
+    bgMat.opacity = 0.7;
+    bgMat.blendType = 2;
+    bgMat.alphaWrite = false;
+    bgMat.update();
+    bg.render.material = bgMat;
+    bg.setLocalScale(1.6, 0.08, 0.08);
+    this.app.root.addChild(bg);
+
+    const fill = new Entity('hpFill' + id);
+    fill.addComponent('render', { type: 'box' });
+    const fillMat = new StandardMaterial();
+    fillMat.emissiveIntensity = 1.8;
+    fillMat.roughness = 0.2;
+    fillMat.metalness = 0.8;
+    fillMat.update();
+    fill.render.material = fillMat;
+    fill.setLocalScale(1.6, 0.08, 0.08);
+    this.app.root.addChild(fill);
+
+    return { bg, fill };
+  }
+
+  _createCooldownElements() {
     const ringSize = 52;
     const halfSide = 48;
     const triHeight = Math.round(halfSide * Math.sqrt(3));
@@ -17,7 +91,7 @@ export class CooldownHUD {
     this.container = document.createElement('div');
     this.container.style.cssText = 'position:fixed;bottom:30px;right:20px;pointer-events:none;z-index:100;width:' + (halfSide * 2 + ringSize) + 'px;height:' + (triHeight + ringSize) + 'px;';
 
-    for (let i = 0; i < this.numSkills; i++) {
+    for (let i = 0; i < 3; i++) {
       const wrapper = document.createElement('div');
       wrapper.style.cssText = 'position:absolute;width:' + ringSize + 'px;height:' + ringSize + 'px;';
 
@@ -70,7 +144,6 @@ export class CooldownHUD {
       iconGroup.setAttribute('fill', 'none');
 
       if (i === 0) {
-        // Projectile: crosshair / reticle
         const crosshair = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         crosshair.setAttribute('stroke', iconColor);
         crosshair.setAttribute('stroke-width', '2.5');
@@ -103,18 +176,14 @@ export class CooldownHUD {
         crosshair.appendChild(rightLine);
 
         iconGroup.appendChild(crosshair);
-
-      } else     if (i === 1) {
-        // Dash: lightning bolt
+      } else if (i === 1) {
         const bolt = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         bolt.setAttribute('points', '2,-16 -7,-1 0,-1 -3,16 9,-1 2,-1');
         bolt.setAttribute('fill', iconColor);
         bolt.setAttribute('stroke', iconColor);
         bolt.setAttribute('stroke-width', '1.5');
         iconGroup.appendChild(bolt);
-
       } else {
-        // Shield: classic shield shape
         const shield = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         shield.setAttribute('d', 'M0,-16 L14,-10 L14,3 C14,12 8,17 0,21 C-8,17 -14,12 -14,3 L-14,-10 Z');
         shield.setAttribute('fill', iconColor + '40');
@@ -155,16 +224,16 @@ export class CooldownHUD {
     document.body.appendChild(this.container);
   }
 
-  update(cooldowns) {
+  _updateCooldowns(cooldowns) {
     if (!this.rings.length) return;
-    for (let i = 0; i < this.numSkills; i++) {
+    for (let i = 0; i < 3; i++) {
       const ring = this.rings[i];
       const label = this.texts[i];
       if (!ring || !label) continue;
       const cooldown = cooldowns[i] || 0;
       if (cooldown <= 0) {
         ring.setAttribute('stroke-dashoffset', 0);
-     label.textContent = i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield');
+        label.textContent = i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield');
       } else {
         const ratio = 1 - (cooldown / this.max);
         ring.setAttribute('stroke-dashoffset', this.circumference * (1 - ratio));
@@ -176,6 +245,13 @@ export class CooldownHUD {
   }
 
   destroy() {
+    for (const [, bar] of this.healthBarEntities) {
+      if (bar.bg.parent) bar.bg.parent.removeChild(bar.bg);
+      bar.bg.destroy();
+      if (bar.fill.parent) bar.fill.parent.removeChild(bar.fill);
+      bar.fill.destroy();
+    }
+    this.healthBarEntities.clear();
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }

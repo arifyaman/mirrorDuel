@@ -9,7 +9,6 @@ export class Physics {
     this.indicatorEntities = new Map();
     this.playerLights = new Map();
     this.projectileEntities = new Map();
-    this.healthBarEntities = new Map();
     this.app = app;
   }
 
@@ -64,26 +63,6 @@ export class Physics {
         indMat.update();
       }
 
-      const bar = this.healthBarEntities.get(p.id);
-      if (bar) {
-        const ratio = Math.max(0, Math.min(1, p.health / 100));
-        const fullWidth = 1.6;
-        bar.fill.setLocalScale(fullWidth * ratio, 0.08, 0.08);
-        bar.bg.setPosition(p.x, p.y + 1.4, p.z);
-        bar.fill.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.4, p.z);
-        const fillMat = bar.fill.render.material;
-        if (ratio > 0.6) {
-          fillMat.diffuse = new Color(0.0, 0.85, 0.1);
-          fillMat.emissive = new Color(0.0, 0.8, 0.1);
-        } else if (ratio > 0.3) {
-          fillMat.diffuse = new Color(0.85, 0.7, 0.0);
-          fillMat.emissive = new Color(0.8, 0.6, 0.0);
-        } else {
-          fillMat.diffuse = new Color(0.9, 0.1, 0.0);
-          fillMat.emissive = new Color(0.9, 0.0, 0.0);
-        }
-        fillMat.update();
-      }
     }
   }
 
@@ -194,35 +173,10 @@ export class Physics {
     lightEntity.setPosition(0, 0.8, 0);
     entity.addChild(lightEntity);
 
-    const healthBarBg = new Entity('hpBg' + id);
-    healthBarBg.addComponent('render', { type: 'box' });
-    const hpBgMat = new StandardMaterial();
-    hpBgMat.diffuse = new Color(0.15, 0.15, 0.15);
-    hpBgMat.emissive = new Color(0.1, 0.1, 0.1);
-    hpBgMat.opacity = 0.7;
-    hpBgMat.blendType = 2;
-    hpBgMat.alphaWrite = false;
-    hpBgMat.update();
-    healthBarBg.render.material = hpBgMat;
-    healthBarBg.setLocalScale(1.6, 0.08, 0.08);
-    this.app.root.addChild(healthBarBg);
-
-    const healthBarFill = new Entity('hpFill' + id);
-    healthBarFill.addComponent('render', { type: 'box' });
-    const hpFillMat = new StandardMaterial();
-    hpFillMat.emissiveIntensity = 1.8;
-    hpFillMat.roughness = 0.2;
-    hpFillMat.metalness = 0.8;
-    hpFillMat.update();
-    healthBarFill.render.material = hpFillMat;
-    healthBarFill.setLocalScale(1.6, 0.08, 0.08);
-    this.app.root.addChild(healthBarFill);
-
     this.app.root.addChild(entity);
     this.playerEntities.set(id, entity);
     this.indicatorEntities.set(id, indicator);
     this.playerLights.set(id, lightEntity);
-    this.healthBarEntities.set(id, { bg: healthBarBg, fill: healthBarFill });
     return entity;
   }
 
@@ -272,13 +226,6 @@ export class Physics {
     this.playerEntities.clear();
     this.indicatorEntities.clear();
     this.playerLights.clear();
-    for (const [, bar] of this.healthBarEntities) {
-      if (bar.bg.parent) bar.bg.parent.removeChild(bar.bg);
-      bar.bg.destroy();
-      if (bar.fill.parent) bar.fill.parent.removeChild(bar.fill);
-      bar.fill.destroy();
-    }
-    this.healthBarEntities.clear();
     for (const [id] of this.projectileEntities) {
       this.destroyProjectile(id);
     }
