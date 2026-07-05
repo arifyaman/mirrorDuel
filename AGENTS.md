@@ -33,15 +33,16 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Curve**: Piecewise ease-out — constant speed until `EaseOutStart` (configurable, default 0.5), then ease-out quad deceleration
 - **Movement**: Player can still aim/rotate and queue WASD movement while dashing (updates angle + TargetX/Z for post-dash continuation)
 - **Trail Visual**: Ghostly after-images — player-colored semi-transparent boxes at each position along path, drifting upward+outward with velocity decay, shrinking and fading over 600ms
+- **Evasion**: Player dodges all projectiles while dashing (checked before damage in collision loop, after shield block)
 - **Server authoritative**: Dash start, interpolation, and end all computed on server; client receives snapshots
 
 ### Shield Skill
 - **Activation**: F key (flag 0x04)
 - **Cooldown**: 7 seconds
 - **Active Duration**: 1 second (shield visual is present)
-- **Effect**: Blocks incoming projectiles while active (server-authoritative, projectile destroyed on contact with shielded player)
+- **Effect**: Blocks incoming projectiles within 100° front-facing cone while active (server-authoritative, projectile destroyed on contact)
 - **Visual**: Voronoi crack-pattern sphere with 100° front-facing cone, opening animation (0.3s ease-out), fully open, then closing animation (0.3s ease-in)
-- **Shield blocks projectiles**: Server checks `ShieldActive` before dealing damage; blocked projectiles are destroyed with no damage dealt
+- **Shield blocks projectiles**: Server checks `ShieldActive` and dot product (facing vs direction to projectile) ≥ cos(50°) before dealing damage; blocked projectiles are destroyed with no damage dealt
 
 ### Mirror Cooldown Mechanic
 - When ANY skill activates (fire, dash, OR shield), ALL cooldowns on the opponent are reduced by 50%
@@ -144,7 +145,7 @@ mirrorDuel/
 - **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
-- **Mirror Cooldowns**: When any player activates fire or dash, reduce opponent's fire AND dash cooldowns by 50%; shield activation reduces only opponent's shield cooldown by 50%
+- **Mirror Cooldowns**: Each skill activation reduces only the same skill on opponent by 50% (fire→fire, dash→dash, shield→shield)
 
 ### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
@@ -154,7 +155,7 @@ mirrorDuel/
 
 ### `internal/network/protocol.go`
 - **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
-- **Encoding**: `encodeStateSnapshot()` - 29 bytes per player, 31 bytes per projectile
+- **Encoding**: `encodeStateSnapshot()` - 33 bytes per player, 31 bytes per projectile
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
 - **Read Loop**: Handles multiple coalesced messages per read
 
