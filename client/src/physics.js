@@ -59,6 +59,11 @@ export class Physics {
       entity.setEulerAngles(0, angleDeg, 0);
       entity.enabled = p.health > 0;
 
+      // Dash opacity: semi-transparent when dashing
+      mat.opacity = p.isDashing ? 0.4 : 1.0;
+      mat.blendType = p.isDashing ? BLEND_NORMAL : BLEND_NONE;
+      mat.update();
+
       // Update point light position
       const light = this.playerLights.get(p.id);
       if (light) {
