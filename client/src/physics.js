@@ -11,6 +11,8 @@ export class Physics {
     this.projectileEntities = new Map();
     this._explosions = [];
     this._playerFlash = new Map();
+    this._dashTrails = [];
+    this._prevPlayerPos = new Map();
     this.app = app;
   }
 
@@ -70,6 +72,18 @@ export class Physics {
         indMat.emissiveIntensity = 1.5;
         indMat.update();
       }
+
+      // Dash streak trail detection
+      const prevPos = this._prevPlayerPos.get(p.id);
+      if (prevPos) {
+        const dx = p.x - prevPos.x;
+        const dz = p.z - prevPos.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist > 0.25) {
+          this.createDashTrail(prevPos.x, prevPos.y, prevPos.z, p.x, p.y, p.z);
+        }
+      }
+      this._prevPlayerPos.set(p.id, { x: p.x, y: p.y, z: p.z });
 
     }
   }
@@ -291,6 +305,53 @@ export class Physics {
       });
     }
     this._explosions.push({ particles, startTime: performance.now(), duration: 1200 });
+  }
+
+  createDashTrail(x1, y1, z1, x2, y2, z2) {
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    const mz = (z1 + z2) / 2;
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 0.01) return;
+    const angle = Math.atan2(dx, dz) * (180 / Math.PI);
+
+    const e = new Entity('dashTrail');
+    e.addComponent('render', { type: 'box' });
+    const mat = new StandardMaterial();
+    mat.diffuse = new Color(0.6, 0.8, 1);
+    mat.emissive = new Color(0.3, 0.6, 1);
+    mat.emissiveIntensity = 2.0;
+    mat.opacity = 0.7;
+    mat.blendType = 2;
+    mat.alphaWrite = false;
+    mat.update();
+    e.render.material = mat;
+    e.setLocalScale(0.12, 0.02, len);
+    e.setPosition(mx, my, mz);
+    e.setEulerAngles(0, angle, 0);
+    this.app.root.addChild(e);
+    this._dashTrails.push({ entity: e, createdAt: performance.now(), duration: 400 });
+  }
+
+  updateDashTrails() {
+    const now = performance.now();
+    for (let i = this._dashTrails.length - 1; i >= 0; i--) {
+      const t = this._dashTrails[i];
+      const elapsed = now - t.createdAt;
+      if (elapsed >= t.duration) {
+        if (t.entity.parent) t.entity.parent.removeChild(t.entity);
+        t.entity.destroy();
+        this._dashTrails.splice(i, 1);
+        continue;
+      }
+      const alpha = 1 - elapsed / t.duration;
+      const mat = t.entity.render.material;
+      mat.opacity = alpha * 0.7;
+      mat.emissiveIntensity = alpha * 2.0;
+      mat.update();
+    }
   }
 
   flashPlayer(id) {

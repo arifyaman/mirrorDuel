@@ -7,6 +7,7 @@ export class Input {
     this.mouseY = 0;
     this.mouseDown = false;
     this.fire = false;
+    this.dash = false;
     this._rayOrigin = new Vec3();
     this._rayDir = new Vec3();
     this._cam = null;
@@ -21,10 +22,12 @@ export class Input {
     window.addEventListener('keydown', e => {
       this.keys[e.key.toLowerCase()] = true;
       if (e.key.toLowerCase() === 'r') this.fire = true;
+      if (e.key === ' ') this.dash = true;
     });
     window.addEventListener('keyup', e => {
       this.keys[e.key.toLowerCase()] = false;
       if (e.key.toLowerCase() === 'r') this.fire = false;
+      if (e.key === ' ') this.dash = false;
     });
 
     this._canvas.addEventListener('mousemove', e => this.onMouseMove(e));

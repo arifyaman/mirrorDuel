@@ -37,22 +37,31 @@ func (s *GameSession) TickStep() {
 	s.tick++
 
 	// Process buffered inputs for all players
-	firedIDs := make(map[int]bool)
+	activatedIDs := make(map[int]bool)
 	firedPlayers := make(map[int]*Player)
 	for _, player := range s.Players {
 		player.ProcessInputs(0.01667)
 		if player.JustFired {
-			firedIDs[player.ID] = true
+			activatedIDs[player.ID] = true
 			firedPlayers[player.ID] = player
 			player.JustFired = false
 		}
+		if player.JustDashed {
+			activatedIDs[player.ID] = true
+			player.JustDashed = false
+		}
 	}
 
-	// Mirror cooldown reduction: when any player fires, reduce all OTHER players' cooldowns by 50%
-	for firedID := range firedIDs {
+	// Mirror cooldown reduction: when ANY skill activates, reduce ALL of opponent's cooldowns by 50%
+	for activatedID := range activatedIDs {
 		for _, player := range s.Players {
-			if player.ID != firedID && player.Cooldown > 0 {
-				player.Cooldown *= 0.5
+			if player.ID != activatedID {
+				if player.Cooldown > 0 {
+					player.Cooldown *= 0.5
+				}
+				if player.DashCooldown > 0 {
+					player.DashCooldown *= 0.5
+				}
 			}
 		}
 	}
@@ -137,13 +146,14 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 	players = make([]network.PlayerSnapshot, 0, len(s.Players))
 	for _, p := range s.Players {
 		players = append(players, network.PlayerSnapshot{
-			ID:       uint8(p.ID),
-			X:        p.X,
-			Y:        p.Y,
-			Z:        p.Z,
-			Angle:    p.Angle,
-			Cooldown: p.Cooldown,
-			Health:   p.Health,
+			ID:           uint8(p.ID),
+			X:            p.X,
+			Y:            p.Y,
+			Z:            p.Z,
+			Angle:        p.Angle,
+			Cooldown:     p.Cooldown,
+			Health:       p.Health,
+			DashCooldown: p.DashCooldown,
 		})
 	}
 

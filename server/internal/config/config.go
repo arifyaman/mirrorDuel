@@ -12,6 +12,15 @@ type Config struct {
 	SpeedStrafe   float32
 	TurnSpeed     float32
 	Projectile    ProjectileConfig
+	Dash          DashConfig
+}
+
+// DashConfig holds dash skill settings.
+type DashConfig struct {
+	Cooldown     float32
+	Distance     float32
+	Duration     int     // ticks
+	EaseOutStart float32 // 0-1, fraction of dash when deceleration begins
 }
 
 // ProjectileConfig mirrors the skills.projectile config.
@@ -43,6 +52,12 @@ func Default() *Config {
 			MaxParticles:  18,
 			BurstSpeed:    8,
 			BurstDuration: 1.5,
+		},
+		Dash: DashConfig{
+			Cooldown: 7,
+			Distance: 4,
+			Duration: 20,
+			EaseOutStart: 0.2,
 		},
 	}
 }

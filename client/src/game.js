@@ -49,6 +49,7 @@ export class Game {
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
     this.myCooldown = 0;
+    this.myDashCooldown = 0;
     this._prevMyCooldown = 0;
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
@@ -89,6 +90,7 @@ export class Game {
     const myPlayer = players.find(p => p.id === this.network.myPlayerId);
     if (myPlayer) {
       this.myCooldown = Math.max(0, myPlayer.cooldown);
+      this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
     }
@@ -136,7 +138,7 @@ export class Game {
     this.scene.setPlayerPositions(players.map(p => ({ x: p.x, z: p.z })));
 
     this.physics.applySnapshot(players, projectiles);
-    this.ui.update(players, [this.myCooldown, 0, 0]);
+    this.ui.update(players, [this.myCooldown, this.myDashCooldown, 0]);
   }
 
   recreateHUD() {
@@ -148,6 +150,7 @@ export class Game {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
     this.physics.updateExplosions();
+    this.physics.updateDashTrails();
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;
@@ -157,11 +160,18 @@ export class Game {
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);
     }
+    if (this.myDashCooldown > 0) {
+      this.myDashCooldown = Math.max(0, this.myDashCooldown - dt);
+    }
     const myId = this.network.myPlayerId;
     const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
     const moveX = dead ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
     const moveZ = dead ? 0 : (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
-    const flags = dead ? 0 : (this.input.fire ? 0x01 : 0);
+    let flags = 0;
+    if (!dead) {
+      if (this.input.fire) flags |= 0x01;
+      if (this.input.dash) flags |= 0x02;
+    }
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
   }
 }

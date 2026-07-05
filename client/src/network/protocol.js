@@ -43,7 +43,8 @@ export function decodeStateSnapshot(data) {
     const angle = dv.getFloat32(off, true); off += 4;
     const cooldown = dv.getFloat32(off, true); off += 4;
     const health = dv.getFloat32(off, true); off += 4;
-    players.push({ id, x, y, z, angle, cooldown, health });
+    const dashCooldown = dv.getFloat32(off, true); off += 4;
+    players.push({ id, x, y, z, angle, cooldown, health, dashCooldown });
   }
 
   const projCount = dv.getUint8(off); off += 1;

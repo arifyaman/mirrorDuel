@@ -33,16 +33,25 @@ type Player struct {
 	TargetX float32
 	TargetZ float32
 
-	Angle    float32
-	Cooldown float32
+	Angle        float32
+	Cooldown     float32
+	DashCooldown float32
 
 	JustFired      bool
+	JustDashed     bool
 	AimX           float32
 	AimZ           float32
 	BufferedInputs []network.PlayerInput
 	GameSession    *GameSession
 	Session        SessionIface
 	Config         *config.Config
+
+	IsDashing     bool
+	DashStartTick int
+	DashStartX    float32
+	DashStartZ    float32
+	DashTargetX   float32
+	DashTargetZ   float32
 }
 
 // NewPlayer creates a new Player.
@@ -74,28 +83,67 @@ func (p *Player) ProcessInputs(dt float32) {
 	}
 
 	last := &p.BufferedInputs[len(p.BufferedInputs)-1]
+
+	if p.IsDashing {
+		p.processDash(dt)
+		p.processAngleAndAim(last)
+		p.processMovementTarget(last, dt)
+	} else {
+		p.processNormal(last, dt)
+	}
+
+	// Cooldown decay
+	if p.Cooldown > 0 {
+		p.Cooldown -= dt
+		if p.Cooldown < 0 {
+			p.Cooldown = 0
+		}
+	}
+	if p.DashCooldown > 0 {
+		p.DashCooldown -= dt
+		if p.DashCooldown < 0 {
+			p.DashCooldown = 0
+		}
+	}
+
+	// Check for projectile activation (flags & 0x01)
+	if last.Flags&0x01 != 0 && p.Cooldown <= 0 && !p.IsDashing {
+		p.JustFired = true
+	}
+
+	// Check for dash activation (flags & 0x02)
+	if last.Flags&0x02 != 0 && p.DashCooldown <= 0 && !p.IsDashing {
+		p.startDash()
+	}
+
+	// Clear buffer
+	p.BufferedInputs = nil
+}
+
+func (p *Player) processNormal(last *network.PlayerInput, dt float32) {
+	p.processMovementTarget(last, dt)
+	p.applyLerp(dt)
+	p.processAngleAndAim(last)
+}
+
+func (p *Player) processMovementTarget(last *network.PlayerInput, dt float32) {
 	moveX := last.MoveX
 	moveZ := last.MoveZ
 
 	halfFloor := p.Config.FloorSize / 2
 	speed := p.Config.PlayerSpeed
 
-	// Update target position with camera-relative movement + speed modulation
 	if moveX != 0 || moveZ != 0 {
-		// Camera-relative: W=-Z, S=+Z, A=-X, D=+X
 		moveDirX := float32(moveX)
 		moveDirZ := float32(-moveZ)
 
-		// Player forward direction (from angle)
 		playerForwardX := math.Sin(float64(p.Angle))
 		playerForwardZ := math.Cos(float64(p.Angle))
 
-		// Normalized move direction
 		moveLen := float32(math.Sqrt(float64(moveDirX*moveDirX + moveDirZ*moveDirZ)))
 		normMoveX := moveDirX / moveLen
 		normMoveZ := moveDirZ / moveLen
 
-		// Alignment (dot product of move dir and player forward)
 		alignment := normMoveX*float32(playerForwardX) + normMoveZ*float32(playerForwardZ)
 		speedMult := 0.75 + 0.25*alignment
 
@@ -103,7 +151,6 @@ func (p *Player) ProcessInputs(dt float32) {
 		p.TargetZ += normMoveZ * speed * speedMult * dt
 	}
 
- // Clamp target to floor bounds [-FloorSize/2, FloorSize/2]
 	if p.TargetX < -halfFloor {
 		p.TargetX = -halfFloor
 	} else if p.TargetX > halfFloor {
@@ -114,8 +161,9 @@ func (p *Player) ProcessInputs(dt float32) {
 	} else if p.TargetZ > halfFloor {
 		p.TargetZ = halfFloor
 	}
+}
 
-	// Smooth lerp toward target position
+func (p *Player) applyLerp(dt float32) {
 	lerpFactor := p.Config.LerpFactor
 	if lerpFactor == 0 {
 		lerpFactor = 8
@@ -123,15 +171,16 @@ func (p *Player) ProcessInputs(dt float32) {
 	alpha := float32(1.0 - math.Exp(-float64(lerpFactor)*float64(dt)))
 	p.X += (p.TargetX - p.X) * alpha
 	p.Z += (p.TargetZ - p.Z) * alpha
+}
 
-	// Update angle toward mouse cursor with turn speed limit
+func (p *Player) processAngleAndAim(last *network.PlayerInput) {
 	mdx := last.MouseX - p.X
 	mdz := last.MouseY - p.Z
 	dist := float32(math.Sqrt(float64(mdx*mdx + mdz*mdz)))
 	if dist > 0.01 {
 		desiredAngle := math.Atan2(float64(mdx), float64(mdz))
 		angleDiff := math.Atan2(math.Sin(desiredAngle-float64(p.Angle)), math.Cos(desiredAngle-float64(p.Angle)))
-		maxDelta := float64(p.Config.TurnSpeed) * float64(dt)
+		maxDelta := float64(p.Config.TurnSpeed) * 0.01667
 		if angleDiff > maxDelta {
 			angleDiff = maxDelta
 		} else if angleDiff < -maxDelta {
@@ -140,23 +189,72 @@ func (p *Player) ProcessInputs(dt float32) {
 		p.Angle += float32(angleDiff)
 	}
 
-	// Store aim position for projectile spawning
 	p.AimX = last.MouseX
 	p.AimZ = last.MouseY
+}
 
-	// Cooldown decay
-	if p.Cooldown > 0 {
-		p.Cooldown -= dt
-		if p.Cooldown < 0 {
-			p.Cooldown = 0
-		}
+func (p *Player) startDash() {
+	p.JustDashed = true
+	p.IsDashing = true
+	p.DashCooldown = p.Config.Dash.Cooldown
+	p.DashStartTick = p.GameSession.tick
+	p.DashStartX = p.X
+	p.DashStartZ = p.Z
+
+	angle := float64(p.Angle)
+	dirX := float32(math.Sin(angle))
+	dirZ := float32(math.Cos(angle))
+	dist := p.Config.Dash.Distance
+
+	p.DashTargetX = p.X + dirX*dist
+	p.DashTargetZ = p.Z + dirZ*dist
+
+	halfFloor := p.Config.FloorSize / 2
+	if p.DashTargetX < -halfFloor {
+		p.DashTargetX = -halfFloor
+	} else if p.DashTargetX > halfFloor {
+		p.DashTargetX = halfFloor
+	}
+	if p.DashTargetZ < -halfFloor {
+		p.DashTargetZ = -halfFloor
+	} else if p.DashTargetZ > halfFloor {
+		p.DashTargetZ = halfFloor
+	}
+}
+
+func (p *Player) processDash(dt float32) {
+	elapsed := p.GameSession.tick - p.DashStartTick
+	duration := p.Config.Dash.Duration
+	if duration <= 0 {
+		duration = 1
+	}
+	t := float64(elapsed) / float64(duration)
+	if t >= 1 {
+		t = 1
 	}
 
-	// Check for projectile activation (flags & 0x01)
-	if last.Flags&0x01 != 0 && p.Cooldown <= 0 {
-		p.JustFired = true
+	s := float64(p.Config.Dash.EaseOutStart)
+	if s < 0 {
+		s = 0
+	} else if s > 1 {
+		s = 1
+	}
+	a := 2 / (1 + s)
+
+	var eased float64
+	if t < s {
+		eased = a * t
+	} else {
+		u := (t - s) / (1 - s)
+		eased = a*s + (1-a*s)*(1-(1-u)*(1-u))
 	}
 
-	// Clear buffer
-	p.BufferedInputs = nil
+	p.X = p.DashStartX + (p.DashTargetX-p.DashStartX)*float32(eased)
+	p.Z = p.DashStartZ + (p.DashTargetZ-p.DashStartZ)*float32(eased)
+
+	if t >= 1 {
+		p.IsDashing = false
+		p.TargetX = p.X
+		p.TargetZ = p.Z	
+	}
 }
