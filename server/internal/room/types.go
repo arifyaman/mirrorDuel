@@ -23,11 +23,12 @@ type Projectile struct {
 
 // Player mirrors the TypeScript Player class.
 type Player struct {
-	ID   int
-	Name string
-	X    float32
-	Y    float32
-	Z    float32
+	ID     int
+	Name   string
+	X      float32
+	Y      float32
+	Z      float32
+	Health float32
 
 	TargetX float32
 	TargetZ float32
@@ -52,6 +53,7 @@ func NewPlayer(id int, name string, x, y, z float32, cfg *config.Config) *Player
 		X:         x,
 		Y:         y,
 		Z:         z,
+		Health:    100,
 		TargetX:   x,
 		TargetZ:   z,
 		Config:    cfg,

@@ -50,6 +50,7 @@ export class Game {
     this.input.init();
     this.myCooldown = 0;
     this._prevMyCooldown = 0;
+    this._prevHealth = {};
     this._hudCreated = false;
     this._myPlayerPos = { x: 0, z: 0 };
     this._cameraTarget = { x: 0, z: 0 };
@@ -101,6 +102,17 @@ export class Game {
       if (this.gameTitle) this.gameTitle.triggerJump();
     }
     this._prevMyCooldown = this.myCooldown;
+
+    // Detect hits: health drop on any player
+    for (const p of players) {
+      const prev = this._prevHealth[p.id];
+      if (prev !== undefined && p.health < prev) {
+        const dmg = prev - p.health;
+        const who = p.id === this.network.myPlayerId ? 'ME' : `P${p.id}`;
+        console.log(`[CLIENT HIT] ${who} took ${dmg} damage (${p.health} HP remaining)`);
+      }
+      this._prevHealth[p.id] = p.health;
+    }
 
     // Camera target: midpoint between players if 2+, else single player
     if (players.length >= 2) {

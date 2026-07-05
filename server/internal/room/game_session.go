@@ -1,6 +1,7 @@
 package room
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -85,12 +86,36 @@ func (s *GameSession) TickStep() {
 		})
 	}
 
-	// Update projectiles (client simulates position from spawn data)
+	// Update projectiles with collision detection (server-authoritative)
 	maxReach := s.Config.Projectile.MaxReach
+	hitRadius := float32(0.5)
 	alive := make([]Projectile, 0, len(s.Projectiles))
 	for _, p := range s.Projectiles {
 		traveled := float32(s.tick-p.SpawnTick)*0.01667*p.Speed
-		if traveled < maxReach {
+		if traveled >= maxReach {
+			continue
+		}
+		// Compute current projectile position
+		px := p.StartX + p.DirX*traveled
+		pz := p.StartZ + p.DirZ*traveled
+
+		hit := false
+		for _, player := range s.Players {
+			if player.ID == p.PlayerOwner {
+				continue
+			}
+			dx := px - player.X
+			dz := pz - player.Z
+			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
+			if dist < hitRadius {
+				player.Health -= 20
+				fmt.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f\n",
+					p.ID, p.PlayerOwner, player.ID, player.X, player.Z, player.Health)
+				hit = true
+				break
+			}
+		}
+		if !hit {
 			alive = append(alive, p)
 		}
 	}
@@ -115,6 +140,7 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 			Z:        p.Z,
 			Angle:    p.Angle,
 			Cooldown: p.Cooldown,
+			Health:   p.Health,
 		})
 	}
 

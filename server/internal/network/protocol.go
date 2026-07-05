@@ -58,7 +58,7 @@ func EncodePlayerInput(tick uint16, moveX int8, moveZ int8, mouseX, mouseY float
 
 const (
 	// Snapshot record sizes must match the TypeScript encoder.
-	SnapshotPlayerSize     = 21 // u8 + 4*f32*4
+	SnapshotPlayerSize     = 25 // u8 + 6*f32
 	SnapshotProjectileSize = 31 // u8 + u16 + 7*f32
 )
 
@@ -70,6 +70,7 @@ type PlayerSnapshot struct {
 	Z        float32
 	Angle    float32
 	Cooldown float32
+	Health   float32
 }
 
 // ProjectileSnapshot is the data needed for encoding a projectile in STATE_SNAPSHOT.
@@ -110,6 +111,8 @@ func EncodeStateSnapshot(tick uint16, players []PlayerSnapshot, projectiles []Pr
 		binary.LittleEndian.PutUint32(buf[b:b+4], math.Float32bits(p.Angle))
 		b += 4
 		binary.LittleEndian.PutUint32(buf[b:b+4], math.Float32bits(p.Cooldown))
+		b += 4
+		binary.LittleEndian.PutUint32(buf[b:b+4], math.Float32bits(p.Health))
 		b += 4
 	}
 
