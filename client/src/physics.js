@@ -1,4 +1,4 @@
-import { Color, Entity, ShaderMaterial, StandardMaterial, Vec3, BLEND_NONE, BLEND_NORMAL, CULLFACE_NONE, SEMANTIC_POSITION, SEMANTIC_NORMAL } from 'playcanvas';
+import { Color, Entity, ShaderMaterial, StandardMaterial, Vec3, BLEND_NORMAL, CULLFACE_NONE, SEMANTIC_POSITION, SEMANTIC_NORMAL } from 'playcanvas';
 
 const DT = 0.01667;
 
@@ -58,13 +58,6 @@ export class Physics {
       const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? (p.angle + Math.PI) * (180 / Math.PI) : 0;
       entity.setEulerAngles(0, angleDeg, 0);
       entity.enabled = p.health > 0;
-
-      // Dash opacity: semi-transparent while dashing
-      const dashing = p.dashCooldown > 6.5;
-      mat.opacity = dashing ? 0.35 : 1;
-      mat.blendType = dashing ? BLEND_NORMAL : BLEND_NONE;
-      mat.alphaWrite = !dashing;
-      mat.update();
 
       // Update point light position
       const light = this.playerLights.get(p.id);

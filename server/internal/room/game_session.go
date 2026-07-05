@@ -197,7 +197,6 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 			Health:         p.Health,
 			DashCooldown:   p.DashCooldown,
 			ShieldCooldown: p.ShieldCooldown,
-			IsDashing:      p.IsDashing,
 		})
 	}
 
