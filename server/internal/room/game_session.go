@@ -37,50 +37,49 @@ func (s *GameSession) TickStep() {
 	s.tick++
 
 	// Process buffered inputs for all players
+	type skillType int
+	const (
+		skillFire   skillType = 1
+		skillDash   skillType = 2
+		skillShield skillType = 3
+	)
 	type activation struct {
-		shieldOnly bool
+		skill skillType
 	}
 	activatedIDs := make(map[int]activation)
 	firedPlayers := make(map[int]*Player)
 	for _, player := range s.Players {
 		player.ProcessInputs(0.01667)
 		if player.JustFired {
-			activatedIDs[player.ID] = activation{shieldOnly: false}
+			activatedIDs[player.ID] = activation{skill: skillFire}
 			firedPlayers[player.ID] = player
 			player.JustFired = false
 		}
 		if player.JustDashed {
-			activatedIDs[player.ID] = activation{shieldOnly: false}
+			activatedIDs[player.ID] = activation{skill: skillDash}
 			player.JustDashed = false
 		}
 		if player.JustShielded {
-			if existing, ok := activatedIDs[player.ID]; ok && !existing.shieldOnly {
-				// already marked with fire/dash, keep it as full mirror
-			} else {
-				activatedIDs[player.ID] = activation{shieldOnly: true}
-			}
+			activatedIDs[player.ID] = activation{skill: skillShield}
 			player.JustShielded = false
 		}
 	}
 
-	// Mirror cooldown reduction: when ANY skill activates, reduce opponent's cooldowns
-	// Fire and dash reduce ALL cooldowns; shield reduces only shield cooldown
+	// Mirror cooldown reduction: when a skill activates, reduce the SAME skill's
+	// cooldown on the opponent by 50%
 	for activatedID, act := range activatedIDs {
 		for _, player := range s.Players {
 			if player.ID != activatedID {
-				if act.shieldOnly {
-					// Shield activation: only reduces opponent's shield cooldown
-					if player.ShieldCooldown > 0 {
-						player.ShieldCooldown *= 0.5
-					}
-				} else {
-					// Fire/dash activation: reduces all opponent's cooldowns
+				switch act.skill {
+				case skillFire:
 					if player.Cooldown > 0 {
 						player.Cooldown *= 0.5
 					}
+				case skillDash:
 					if player.DashCooldown > 0 {
 						player.DashCooldown *= 0.5
 					}
+				case skillShield:
 					if player.ShieldCooldown > 0 {
 						player.ShieldCooldown *= 0.5
 					}

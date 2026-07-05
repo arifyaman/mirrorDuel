@@ -45,9 +45,10 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 
 ### Mirror Cooldown Mechanic
 - When ANY skill activates (fire, dash, OR shield), ALL cooldowns on the opponent are reduced by 50%
-- Fire and dash activation reduce opponent's fire + dash + shield cooldowns
-- Shield activation reduces only opponent's shield cooldown (not fire/dash)
-- Creates the core gameplay loop: aggressive play pressures opponent's cooldowns
+- Fire activation reduces opponent's fire cooldown by 50%
+- Dash activation reduces opponent's dash cooldown by 50%
+- Shield activation reduces opponent's shield cooldown by 50%
+- Each skill only mirrors the same skill on the opponent (not cross-skill)
 
 ### HUD
 - **3 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
