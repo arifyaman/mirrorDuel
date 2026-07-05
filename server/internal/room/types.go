@@ -68,7 +68,8 @@ func (p *Player) QueueInput(input network.PlayerInput) {
 // ProcessInputs processes buffered inputs for one tick.
 // Takes only the last input (intermediate inputs are discarded).
 func (p *Player) ProcessInputs(dt float32) {
-	if len(p.BufferedInputs) == 0 {
+	if len(p.BufferedInputs) == 0 || p.Health <= 0 {
+		p.BufferedInputs = nil
 		return
 	}
 

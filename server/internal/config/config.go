@@ -19,6 +19,7 @@ type ProjectileConfig struct {
 	Cooldown      float32
 	Speed         float32
 	MaxReach      float32
+	Damage        float32
 	MaxParticles  int
 	BurstSpeed    float32
 	BurstDuration float32
@@ -38,6 +39,7 @@ func Default() *Config {
 			Cooldown:      3,
 			Speed:         13.5,
 			MaxReach:      8,
+			Damage:        100,
 			MaxParticles:  18,
 			BurstSpeed:    8,
 			BurstDuration: 1.5,

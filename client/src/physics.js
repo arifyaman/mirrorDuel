@@ -9,6 +9,7 @@ export class Physics {
     this.indicatorEntities = new Map();
     this.playerLights = new Map();
     this.projectileEntities = new Map();
+    this._explosions = [];
     this.app = app;
   }
 
@@ -46,7 +47,7 @@ export class Physics {
       entity.setPosition(p.x, p.y, p.z);
       const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? (p.angle + Math.PI) * (180 / Math.PI) : 0;
       entity.setEulerAngles(0, angleDeg, 0);
-      entity.enabled = true;
+      entity.enabled = p.health > 0;
 
       // Update point light position
       const light = this.playerLights.get(p.id);
@@ -242,6 +243,85 @@ export class Physics {
       const pz = data.startZ + data.dirZ * elapsed * data.speed;
       data.entity.setPosition(px, py, pz);
       data.lightEntity.setPosition(px, py + 0.15, pz);
+    }
+  }
+
+  createExplosion(x, y, z, hexColor) {
+    const color = new Color(
+      parseInt(hexColor.slice(1, 3), 16) / 255,
+      parseInt(hexColor.slice(3, 5), 16) / 255,
+      parseInt(hexColor.slice(5, 7), 16) / 255
+    );
+    const count = 24;
+    const particles = [];
+    for (let i = 0; i < count; i++) {
+      const e = new Entity('explode');
+      e.addComponent('render', { type: 'sphere' });
+      const mat = new StandardMaterial();
+      mat.diffuse = color;
+      mat.emissive = color;
+      mat.emissiveIntensity = 2.0;
+      mat.opacity = 1;
+      mat.blendType = 2;
+      mat.alphaWrite = false;
+      mat.update();
+      e.render.material = mat;
+      const scale = 0.05 + Math.random() * 0.15;
+      e.setLocalScale(scale, scale, scale);
+      e.setPosition(x + (Math.random() - 0.5) * 0.2, y + (Math.random() - 0.5) * 0.2, z + (Math.random() - 0.5) * 0.2);
+      this.app.root.addChild(e);
+      const speed = 1.5 + Math.random() * 3;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      const initialScale = scale;
+      particles.push({
+        entity: e,
+        initialScale,
+        vx: Math.sin(phi) * Math.cos(theta) * speed,
+        vy: Math.sin(phi) * Math.sin(theta) * speed,
+        vz: Math.cos(phi) * speed,
+        nextDirChange: 20 + Math.random() * 80,
+      });
+    }
+    this._explosions.push({ particles, startTime: performance.now(), duration: 1200 });
+  }
+
+  updateExplosions() {
+    const now = performance.now();
+    for (let i = this._explosions.length - 1; i >= 0; i--) {
+      const exp = this._explosions[i];
+      const elapsed = now - exp.startTime;
+      if (elapsed >= exp.duration) {
+        for (const p of exp.particles) {
+          if (p.entity.parent) p.entity.parent.removeChild(p.entity);
+          p.entity.destroy();
+        }
+        this._explosions.splice(i, 1);
+        continue;
+      }
+      const t = elapsed / exp.duration;
+      const decay = 1 - t;
+      for (const p of exp.particles) {
+        if (elapsed > p.nextDirChange) {
+          const jitter = 0.6 + Math.random() * 1.2;
+          const theta2 = Math.random() * Math.PI * 2;
+          const phi2 = Math.random() * Math.PI;
+          p.vx += Math.sin(phi2) * Math.cos(theta2) * jitter;
+          p.vy += Math.sin(phi2) * Math.sin(theta2) * jitter;
+          p.vz += Math.cos(phi2) * jitter;
+          p.nextDirChange = elapsed + 20 + Math.random() * 100;
+        }
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.vz *= 0.96;
+        p.entity.translate(p.vx * 0.016, p.vy * 0.016, p.vz * 0.016);
+        const s = p.initialScale * decay;
+        p.entity.setLocalScale(s, s, s);
+        const mat = p.entity.render.material;
+        mat.opacity = decay;
+        mat.emissiveIntensity = decay * 2.0;
+        mat.update();
+      }
     }
   }
 }

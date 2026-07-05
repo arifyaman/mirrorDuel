@@ -106,6 +106,11 @@ export class Game {
         const dmg = prev - p.health;
         const who = p.id === this.network.myPlayerId ? 'ME' : `P${p.id}`;
         console.log(`[CLIENT HIT] ${who} took ${dmg} damage (${p.health} HP remaining)`);
+        if (p.health <= 0 && prev > 0) {
+          const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
+          this.physics.createExplosion(p.x, p.y, p.z, explosionColor);
+          console.log(`[DEATH] ${who} died!`);
+        }
       }
       this._prevHealth[p.id] = p.health;
     }
@@ -139,6 +144,7 @@ export class Game {
   update(dt) {
     this.physics.simTime += dt;
     this.physics.updateProjectiles();
+    this.physics.updateExplosions();
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;
@@ -148,9 +154,11 @@ export class Game {
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);
     }
-    const moveX = (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
-    const moveZ = (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
-    const flags = this.input.fire ? 0x01 : 0;
+    const myId = this.network.myPlayerId;
+    const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
+    const moveX = dead ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
+    const moveZ = dead ? 0 : (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
+    const flags = dead ? 0 : (this.input.fire ? 0x01 : 0);
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
   }
 }

@@ -60,7 +60,7 @@ func (s *GameSession) TickStep() {
 	// Fire projectiles for players that fired this tick (must be inside lock so projectiles
 	// are captured in the snapshot below)
 	for _, player := range firedPlayers {
-		if player.Cooldown > 0 {
+		if player.Cooldown > 0 || player.Health <= 0 {
 			continue
 		}
 		cfg := s.Config.Projectile
@@ -101,14 +101,17 @@ func (s *GameSession) TickStep() {
 
 		hit := false
 		for _, player := range s.Players {
-			if player.ID == p.PlayerOwner {
+			if player.ID == p.PlayerOwner || player.Health <= 0 {
 				continue
 			}
 			dx := px - player.X
 			dz := pz - player.Z
 			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
 			if dist < hitRadius {
-				player.Health -= 20
+				player.Health -= s.Config.Projectile.Damage
+				if player.Health < 0 {
+					player.Health = 0
+				}
 				fmt.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f\n",
 					p.ID, p.PlayerOwner, player.ID, player.X, player.Z, player.Health)
 				hit = true

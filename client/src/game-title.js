@@ -30,7 +30,7 @@ export class GameTitle {
     this.title = document.createElement('div');
     this.title.style.cssText = `
       font-family: 'Orbitron', 'Segoe UI', sans-serif;
-      font-size: 36px;
+      font-size: 52px;
       font-weight: 900;
       color: #fff;
       text-transform: uppercase;
@@ -54,7 +54,7 @@ export class GameTitle {
     this.subtitle = document.createElement('div');
     this.subtitle.style.cssText = `
       font-family: 'Courier New', monospace;
-      font-size: 13px;
+      font-size: 18px;
       font-weight: bold;
       color: #ffaa44;
       letter-spacing: 2px;
