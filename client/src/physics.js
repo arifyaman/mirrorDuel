@@ -73,14 +73,14 @@ export class Physics {
         indMat.update();
       }
 
-      // Dash streak trail detection
+      // Dash ghost trail
       const prevPos = this._prevPlayerPos.get(p.id);
       if (prevPos) {
         const dx = p.x - prevPos.x;
         const dz = p.z - prevPos.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist > 0.25) {
-          this.createDashTrail(prevPos.x, prevPos.y, prevPos.z, p.x, p.y, p.z);
+        if (dist > 0.28) {
+          this.createDashGhost(p.id, prevPos.x, prevPos.y, prevPos.z, p.angle);
         }
       }
       this._prevPlayerPos.set(p.id, { x: p.x, y: p.y, z: p.z });
@@ -307,52 +307,36 @@ export class Physics {
     this._explosions.push({ particles, startTime: performance.now(), duration: 1200 });
   }
 
-  createDashTrail(x1, y1, z1, x2, y2, z2) {
-    const dx = x2 - x1;
-    const dz = z2 - z1;
-    const len = Math.sqrt(dx * dx + dz * dz);
-    if (len < 0.01) return;
-    // Perpendicular vector for lateral offset
-    const nx = -dz / len;
-    const nz = dx / len;
-    const now = performance.now();
-    const duration = 600;
+  createDashGhost(playerId, x, y, z, angle) {
+    const col = { 
+      1: { diffuse: new Color(1, 0.2, 0.2), emissive: new Color(1, 0.1, 0.05) },
+      2: { diffuse: new Color(0.2, 0.2, 1), emissive: new Color(0.05, 0.05, 1) },
+    }[playerId] || { diffuse: new Color(0.5, 0.5, 0.5), emissive: new Color(0.2, 0.2, 0.2) };
 
-    // Place puffs along the segment with random offsets
-    const puffCount = 5 + Math.floor(len * 3);
-    for (let i = 0; i < puffCount; i++) {
-      const t = i / puffCount;
-      const lt = t + (Math.random() - 0.5) * 0.15;
-      const bx = x1 + dx * lt + nx * (Math.random() - 0.5) * 0.25;
-      const by = y1 + (Math.random() - 0.5) * 0.04;
-      const bz = z1 + dz * lt + nz * (Math.random() - 0.5) * 0.25;
-
-      const puff = new Entity('dashPuff');
-      puff.addComponent('render', { type: 'sphere' });
-      const mat = new StandardMaterial();
-      mat.diffuse = new Color(0.3, 0.7, 1);
-      mat.emissive = new Color(0.2, 0.5, 1);
-      mat.emissiveIntensity = 2.0;
-      mat.opacity = 0.6;
-      mat.blendType = 2;
-      mat.alphaWrite = false;
-      mat.update();
-      puff.render.material = mat;
-      const s = 0.04 + Math.random() * 0.08;
-      puff.setLocalScale(s, s, s);
-      puff.setPosition(bx, by, bz);
-      this.app.root.addChild(puff);
-      const puffDur = duration + Math.random() * 200;
-      this._dashTrails.push({
-        entity: puff,
-        createdAt: now,
-        duration: puffDur,
-        type: 'puff',
-        driftX: (Math.random() - 0.5) * 0.3,
-        driftZ: (Math.random() - 0.5) * 0.3,
-        baseScale: s,
-      });
-    }
+    const ghost = new Entity('dashGhost');
+    ghost.addComponent('render', { type: 'box' });
+    const mat = new StandardMaterial();
+    mat.diffuse = col.diffuse;
+    mat.emissive = col.emissive;
+    mat.emissiveIntensity = 1.0;
+    mat.opacity = 0.35;
+    mat.blendType = 2;
+    mat.alphaWrite = false;
+    mat.update();
+    ghost.render.material = mat;
+    ghost.setLocalScale(0.5, 0.5, 0.5);
+    ghost.setPosition(x, y, z);
+    const angleDeg = (typeof angle === 'number' && !isNaN(angle)) ? (angle + Math.PI) * (180 / Math.PI) : 0;
+    ghost.setEulerAngles(0, angleDeg, 0);
+    this.app.root.addChild(ghost);
+    this._dashTrails.push({
+      entity: ghost,
+      createdAt: performance.now(),
+      duration: 600,
+      driftX: (Math.random() - 0.5) * 0.3,
+      driftY: 0.2 + Math.random() * 0.3,
+      driftZ: (Math.random() - 0.5) * 0.3,
+    });
   }
 
   updateDashTrails() {
@@ -368,14 +352,13 @@ export class Physics {
       }
       const alpha = 1 - elapsed / t.duration;
       const mat = t.entity.render.material;
-      if (t.type === 'puff') {
-        mat.opacity = alpha * alpha * 0.6;
-        mat.emissiveIntensity = alpha * 2.5;
-        t.entity.translate(t.driftX * 0.016, 0.02 * 0.016, t.driftZ * 0.016);
-        const grow = 1 + (1 - alpha) * 1.5;
-        t.entity.setLocalScale(t.baseScale * grow, t.baseScale * grow, t.baseScale * grow);
-      }
+      mat.opacity = alpha * 0.35;
+      mat.emissiveIntensity = alpha * 1.5;
       mat.update();
+
+      t.entity.translate(t.driftX * alpha * 0.016, t.driftY * alpha * 0.016, t.driftZ * alpha * 0.016);
+      const s = 0.5 * (0.3 + alpha * 0.7);
+      t.entity.setLocalScale(s, s, s);
     }
   }
 
