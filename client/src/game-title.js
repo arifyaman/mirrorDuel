@@ -30,23 +30,21 @@ export class GameTitle {
     this.title = document.createElement('div');
     this.title.style.cssText = `
       font-family: 'Orbitron', 'Segoe UI', sans-serif;
-      font-size: 52px;
+      font-size: 72px;
       font-weight: 900;
       color: #fff;
       text-transform: uppercase;
-      letter-spacing: 10px;
+      letter-spacing: 14px;
       text-shadow:
-        0 0 10px #f00,
-        0 0 20px #f44,
-        0 0 40px #f00,
-        0 0 80px rgba(255,0,0,0.4),
-        0 0 120px rgba(255,0,0,0.2);
+        0 0 8px #f00,
+        0 0 20px rgba(255,50,0,0.5),
+        0 0 40px rgba(255,0,0,0.2);
       line-height: 1.2;
       background: linear-gradient(180deg, #fff 0%, #ff6644 50%, #ff2200 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      filter: drop-shadow(0 0 12px rgba(255,50,0,0.8));
+      filter: drop-shadow(0 0 8px rgba(255,50,0,0.4));
     `;
     this.title.textContent = 'MIRROR DUEL!';
 
@@ -54,7 +52,7 @@ export class GameTitle {
     this.subtitle = document.createElement('div');
     this.subtitle.style.cssText = `
       font-family: 'Courier New', monospace;
-      font-size: 18px;
+      font-size: 24px;
       font-weight: bold;
       color: #ffaa44;
       letter-spacing: 2px;

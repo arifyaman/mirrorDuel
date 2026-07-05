@@ -10,6 +10,7 @@ export class UI {
     this.texts = [];
     this.container = null;
     this._createCooldownElements();
+    this._createFlashOverlay();
   }
 
   update(players, cooldowns) {
@@ -244,6 +245,21 @@ export class UI {
     }
   }
 
+  _createFlashOverlay() {
+    this.flashOverlay = document.createElement('div');
+    this.flashOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:150;background:rgba(255,0,0,0);transition:opacity 0.15s ease-out;';
+    document.body.appendChild(this.flashOverlay);
+  }
+
+  showHitIndicator() {
+    this.flashOverlay.style.transition = 'none';
+    this.flashOverlay.style.background = 'rgba(255,0,0,0.35)';
+    this.flashOverlay.style.opacity = '1';
+    void this.flashOverlay.offsetHeight;
+    this.flashOverlay.style.transition = 'opacity 0.25s ease-out';
+    this.flashOverlay.style.opacity = '0';
+  }
+
   destroy() {
     for (const [, bar] of this.healthBarEntities) {
       if (bar.bg.parent) bar.bg.parent.removeChild(bar.bg);
@@ -254,6 +270,9 @@ export class UI {
     this.healthBarEntities.clear();
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
+    }
+    if (this.flashOverlay && this.flashOverlay.parentNode) {
+      this.flashOverlay.parentNode.removeChild(this.flashOverlay);
     }
   }
 }

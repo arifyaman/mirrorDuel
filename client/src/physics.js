@@ -10,6 +10,7 @@ export class Physics {
     this.playerLights = new Map();
     this.projectileEntities = new Map();
     this._explosions = [];
+    this._playerFlash = new Map();
     this.app = app;
   }
 
@@ -32,9 +33,15 @@ export class Physics {
         entity.enabled = false;
       }
 
-      // Bright pulsing emissive for player
+      // Player hit flash
       const mat = entity.render.material;
-      mat.emissiveIntensity = 1.5;
+      const flashStart = this._playerFlash.get(p.id);
+      if (flashStart && (performance.now() - flashStart) < 250) {
+        mat.emissiveIntensity = 5.0;
+      } else {
+        mat.emissiveIntensity = 1.5;
+        this._playerFlash.delete(p.id);
+      }
       mat.update();
 
       // Edge overlay even brighter
@@ -284,6 +291,10 @@ export class Physics {
       });
     }
     this._explosions.push({ particles, startTime: performance.now(), duration: 1200 });
+  }
+
+  flashPlayer(id) {
+    this._playerFlash.set(id, performance.now());
   }
 
   updateExplosions() {

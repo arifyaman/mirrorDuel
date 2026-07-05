@@ -104,8 +104,11 @@ export class Game {
       const prev = this._prevHealth[p.id];
       if (prev !== undefined && p.health < prev) {
         const dmg = prev - p.health;
-        const who = p.id === this.network.myPlayerId ? 'ME' : `P${p.id}`;
+        const isMe = p.id === this.network.myPlayerId;
+        const who = isMe ? 'ME' : `P${p.id}`;
         console.log(`[CLIENT HIT] ${who} took ${dmg} damage (${p.health} HP remaining)`);
+        this.physics.flashPlayer(p.id);
+        if (isMe) this.ui.showHitIndicator();
         if (p.health <= 0 && prev > 0) {
           const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
           this.physics.createExplosion(p.x, p.y, p.z, explosionColor);
