@@ -37,38 +37,53 @@ func (s *GameSession) TickStep() {
 	s.tick++
 
 	// Process buffered inputs for all players
-	activatedIDs := make(map[int]bool)
+	type activation struct {
+		shieldOnly bool
+	}
+	activatedIDs := make(map[int]activation)
 	firedPlayers := make(map[int]*Player)
 	for _, player := range s.Players {
 		player.ProcessInputs(0.01667)
 		if player.JustFired {
-			activatedIDs[player.ID] = true
+			activatedIDs[player.ID] = activation{shieldOnly: false}
 			firedPlayers[player.ID] = player
 			player.JustFired = false
 		}
 		if player.JustDashed {
-			activatedIDs[player.ID] = true
+			activatedIDs[player.ID] = activation{shieldOnly: false}
 			player.JustDashed = false
 		}
 		if player.JustShielded {
-			activatedIDs[player.ID] = true
+			if existing, ok := activatedIDs[player.ID]; ok && !existing.shieldOnly {
+				// already marked with fire/dash, keep it as full mirror
+			} else {
+				activatedIDs[player.ID] = activation{shieldOnly: true}
+			}
 			player.JustShielded = false
 		}
 	}
 
 	// Mirror cooldown reduction: when ANY skill activates, reduce opponent's cooldowns
-	for activatedID := range activatedIDs {
+	// Fire and dash reduce ALL cooldowns; shield reduces only shield cooldown
+	for activatedID, act := range activatedIDs {
 		for _, player := range s.Players {
 			if player.ID != activatedID {
-				// Fire and dash reduce ALL of opponent's cooldowns
-				if player.Cooldown > 0 {
-					player.Cooldown *= 0.5
-				}
-				if player.DashCooldown > 0 {
-					player.DashCooldown *= 0.5
-				}
-				if player.ShieldCooldown > 0 {
-					player.ShieldCooldown *= 0.5
+				if act.shieldOnly {
+					// Shield activation: only reduces opponent's shield cooldown
+					if player.ShieldCooldown > 0 {
+						player.ShieldCooldown *= 0.5
+					}
+				} else {
+					// Fire/dash activation: reduces all opponent's cooldowns
+					if player.Cooldown > 0 {
+						player.Cooldown *= 0.5
+					}
+					if player.DashCooldown > 0 {
+						player.DashCooldown *= 0.5
+					}
+					if player.ShieldCooldown > 0 {
+						player.ShieldCooldown *= 0.5
+					}
 				}
 			}
 		}

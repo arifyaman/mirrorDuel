@@ -35,16 +35,26 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Trail Visual**: Ghostly after-images — player-colored semi-transparent boxes at each position along path, drifting upward+outward with velocity decay, shrinking and fading over 600ms
 - **Server authoritative**: Dash start, interpolation, and end all computed on server; client receives snapshots
 
+### Shield Skill
+- **Activation**: F key (flag 0x04)
+- **Cooldown**: 7 seconds
+- **Active Duration**: 1 second (shield visual is present)
+- **Effect**: Blocks incoming projectiles while active (server-authoritative, projectile destroyed on contact with shielded player)
+- **Visual**: Voronoi crack-pattern sphere with 100° front-facing cone, opening animation (0.3s ease-out), fully open, then closing animation (0.3s ease-in)
+- **Shield blocks projectiles**: Server checks `ShieldActive` before dealing damage; blocked projectiles are destroyed with no damage dealt
+
 ### Mirror Cooldown Mechanic
-- When ANY skill activates (fire OR dash), ALL cooldowns (fire + dash) on the opponent are reduced by 50%
+- When ANY skill activates (fire, dash, OR shield), ALL cooldowns on the opponent are reduced by 50%
+- Fire and dash activation reduce opponent's fire + dash + shield cooldowns
+- Shield activation reduces only opponent's shield cooldown (not fire/dash)
 - Creates the core gameplay loop: aggressive play pressures opponent's cooldowns
 
 ### HUD
 - **3 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
   - Fire (Skill 1): Crosshair icon, red ring, 3s cooldown
   - Dash (Skill 2): Lightning bolt icon, gold ring, 7s cooldown
-  - Shield (Skill 3): Shield icon with cross, blue ring, placeholder
-- **Cooldown Display**: Animated ring, text shows time remaining or skill name when available
+  - Shield (Skill 3): Shield icon with cross, blue ring, 7s cooldown (fully implemented)
+- **Cooldown Display**: Animated ring (per-skill max values [3, 7, 7]), text shows time remaining or skill name when available
 - **Health Bars**: 3D world-space bars above each player, hidden when dead
 
 ### Scene Elements
@@ -108,7 +118,9 @@ mirrorDuel/
 
 ### `src/network/protocol.js`
 - **Binary Encoding**: `encodePlayerInput()` - 13 bytes (tick:2, moveX:1, moveZ:1, mouseX:4, mouseY:4, flags:1)
+  - flags: `0x01` = fire, `0x02` = dash, `0x04` = shield
 - **Binary Decoding**: `decodeStateSnapshot()` - variable length, players + projectiles
+  - Player: 33 bytes (1 u8 + 8 f32) — includes shieldCooldown
 - **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), DISCONNECT(255)
 
 ### Entity System
@@ -131,7 +143,7 @@ mirrorDuel/
 - **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
-- **Mirror Cooldowns**: When any player activates fire or dash, reduce opponent's fire AND dash cooldowns by 50%
+- **Mirror Cooldowns**: When any player activates fire or dash, reduce opponent's fire AND dash cooldowns by 50%; shield activation reduces only opponent's shield cooldown by 50%
 
 ### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
@@ -170,7 +182,7 @@ mirrorDuel/
 | 1 | JOIN_ROOM | variable | `[nameLen: 1][name: bytes]` |
 | 2 | PLAYER_INPUT | 13 | `[tick: u16][moveX: i8][moveZ: i8][mouseX: f32][mouseY: f32][flags: u8]` |
 
-`flags`: `0x01` = fire, `0x02` = dash
+`flags`: `0x01` = fire, `0x02` = dash, `0x04` = shield
 
 ### Server → Client
 | Type | Name | Size | Format |
@@ -180,7 +192,7 @@ mirrorDuel/
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
-- **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32]` (29 bytes)
+- **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32][shieldCooldown: f32]` (33 bytes)
 - **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
 
 ## Development Workflow
