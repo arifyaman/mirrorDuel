@@ -141,10 +141,18 @@ func (s *GameSession) TickStep() {
 			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
 			if dist < hitRadius {
 				if player.ShieldActive {
-					fmt.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield\n",
-						p.ID, p.PlayerOwner, player.ID)
-					hit = true
-					break
+					angle := float64(player.Angle)
+					facingX := float32(math.Sin(angle))
+					facingZ := float32(math.Cos(angle))
+					ndx := dx / dist
+					ndz := dz / dist
+					dot := ndx*facingX + ndz*facingZ
+					if dot >= float32(math.Cos(50*math.Pi/180)) {
+						fmt.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield (cone)\n",
+							p.ID, p.PlayerOwner, player.ID)
+						hit = true
+						break
+					}
 				}
 				player.Health -= s.Config.Projectile.Damage
 				if player.Health < 0 {

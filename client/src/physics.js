@@ -97,13 +97,12 @@ export class Physics {
           sd = this._createShieldEntity(p.id, shieldColor);
           this._playerShields.set(p.id, sd);
         }
+        sd.active = true;
         sd.shieldCooldown = p.shieldCooldown || 0;
         sd.playerAngle = p.angle || 0;
         sd.playerPos = { x: p.x, y: p.y, z: p.z };
-      } else {
-        if (sd) {
-          sd.entity.enabled = false;
-        }
+      } else if (sd) {
+        sd.active = false;
       }
     }
   }
@@ -262,6 +261,50 @@ export class Physics {
     mat.setParameter('uPlayerAngle', 0);
 
     return { entity, mat, time: 0, shieldCooldown: 0, playerAngle: 0, playerPos: { x: 0, y: 0, z: 0 } };
+  }
+
+  updateAllShields(dt, cameraPos) {
+    const maxConeAngle = 50 * Math.PI / 180;
+    const activeDuration = 1.0;
+    const openDuration = 0.3;
+    const closeDuration = 0.3;
+
+    for (const [id, sd] of this._playerShields) {
+      sd.time += dt;
+      if (!sd.active) {
+        sd.entity.enabled = false;
+        continue;
+      }
+
+      sd.entity.enabled = true;
+      sd.entity.setPosition(sd.playerPos.x, sd.playerPos.y, sd.playerPos.z);
+
+      const mat = sd.mat;
+      mat.setParameter('uTime', sd.time);
+      mat.setParameter('uCameraPos', [cameraPos.x, cameraPos.y, cameraPos.z]);
+      mat.setParameter('uPlayerPos', [sd.playerPos.x, sd.playerPos.y, sd.playerPos.z]);
+      mat.setParameter('uPlayerAngle', sd.playerAngle || 0);
+
+      const t = (7 - sd.shieldCooldown) / activeDuration;
+      let coneFrac;
+      if (t < openDuration / activeDuration) {
+        coneFrac = (t * activeDuration / openDuration);
+        coneFrac = coneFrac * (2 - coneFrac);
+      } else if (t > 1 - closeDuration / activeDuration) {
+        const closeT = (t - (1 - closeDuration / activeDuration)) * activeDuration / closeDuration;
+        coneFrac = 1 - Math.min(closeT, 1) * (2 - Math.min(closeT, 1));
+      } else {
+        coneFrac = 1;
+      }
+      mat.setParameter('uConeAngle', coneFrac * maxConeAngle);
+    }
+  }
+
+  shieldHit(playerId) {
+    const sd = this._playerShields.get(playerId);
+    if (sd) {
+      sd.mat.setParameter('uHitTime', sd.time);
+    }
   }
 
   applyProjectiles(projectives) {
