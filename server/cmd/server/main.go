@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -123,11 +124,47 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func initLog() *os.File {
+	path := os.Getenv("LOG_FILE")
+	if path == "" {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[Log] Failed to open %s: %v\n", path, err)
+		return nil
+	}
+	os.Stdout = f
+	os.Stderr = f
+	return f
+}
+
 func main() {
+	if lf := initLog(); lf != nil {
+		defer lf.Close()
+	}
+
 	cfg := config.Default()
 
-	certFile := "tls/localhost.pem"
-	keyFile := "tls/localhost-key.pem"
+	if v := os.Getenv("QUIC_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.QUICPort = p
+		}
+	}
+	if v := os.Getenv("HTTP_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.HTTPPort = p
+		}
+	}
+
+	certFile := os.Getenv("CERT_FILE")
+	if certFile == "" {
+		certFile = "tls/localhost.pem"
+	}
+	keyFile := os.Getenv("KEY_FILE")
+	if keyFile == "" {
+		keyFile = "tls/localhost-key.pem"
+	}
 
 	_, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {

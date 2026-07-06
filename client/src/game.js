@@ -42,7 +42,8 @@ export class Game {
     this.app.automaticallyManageScenes = false;
 
     this.scene = new Scene(this.app);
-    this.networkClient = new NetworkClient('localhost:4433');
+    const serverUrl = import.meta.env.VITE_SERVER_URL || 'localhost:4433';
+    this.networkClient = new NetworkClient(serverUrl);
     this.network = new Network(this.networkClient, this);
     this.physics = new Physics(this.app);
     this.input = new Input(this.canvas, this.network);

@@ -218,6 +218,34 @@ cd client && npm run dev
 3. First player connects, second player joins automatically
 4. Both players see each other move and fight
 
+## Environment Configuration
+
+Both client and server use `.env` files for configurable endpoints and ports.
+
+### Client `.env` (VITE_* vars)
+| File | Loaded when | Purpose |
+|------|-------------|---------|
+| `.env.development` | `npm run dev` | Local dev server URL |
+| `.env.production` | `npm run build` | Production server URL |
+
+- **VITE_SERVER_URL**: WebTransport server address (`host:port`), default `localhost:4433`
+
+### Server `.env` (env vars)
+Set these via environment variables or copy to `.env`:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `QUIC_PORT` | `4433` | WebTransport/QUIC listen port |
+| `HTTP_PORT` | `8081` | HTTP health check port |
+| `CERT_FILE` | `tls/localhost.pem` | TLS certificate path |
+| `KEY_FILE` | `tls/localhost-key.pem` | TLS private key path |
+
+Run with custom config:
+```bash
+QUIC_PORT=4433 HTTP_PORT=8081 ./main
+# or export vars from .env
+export $(grep -v '^#' .env.development | xargs) && ./main
+```
+
 ## Technical Notes
 
 ### Camera System
