@@ -1,7 +1,7 @@
 package room
 
 import (
-	"fmt"
+	"log"
 
 	"mirror-duel-server-go/internal/config"
 	"mirror-duel-server-go/internal/network"
@@ -57,7 +57,7 @@ func (m *RoomManager) HandleMessage(session SessionIface, msg *network.SessionMe
 func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 	name := network.DecodeJoinRoom(payload)
 	if name == "" {
-		fmt.Printf("[Room] Invalid join room payload from %s\n", session.ID())
+		log.Printf("[Room] Invalid join room payload from %s", session.ID())
 		return
 	}
 
@@ -116,7 +116,7 @@ func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult 
 		m.NextRoomID++
 		room = NewGameSession(roomID, m.Config)
 		m.Rooms = append(m.Rooms, room)
-		fmt.Printf("[Room] Created room %d\n", roomID)
+		log.Printf("[Room] Created room %d", roomID)
 	}
 
 	playerID := len(room.Players) + 1
@@ -131,7 +131,7 @@ func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult 
 		opponentName = other.Name
 	}
 
-	fmt.Printf("[Room] Player %d (%s) joined room %d\n", playerID, playerName, room.RoomID)
+	log.Printf("[Room] Player %d (%s) joined room %d", playerID, playerName, room.RoomID)
 
 	if m.Callbacks.OnSessionCreated != nil {
 		m.Callbacks.OnSessionCreated(session)
@@ -216,7 +216,7 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 		// Only notify remaining players if room is empty (no one left to rematch)
 		if len(room.Players) == 0 {
-			fmt.Printf("[Room] Empty room %d removed\n", room.RoomID)
+			log.Printf("[Room] Empty room %d removed", room.RoomID)
 			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
 			room.mu.Unlock()
 
@@ -224,13 +224,13 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 				m.Callbacks.OnSessionDisconnect(session)
 			}
 
-			fmt.Printf("[Room] Player %d disconnected\n", playerID)
+			log.Printf("[Room] Player %d disconnected", playerID)
 			return
 		}
 
 		room.mu.Unlock()
 
-		fmt.Printf("[Room] Player %d disconnected, room %d now has %d player(s) waiting\n", playerID, room.RoomID, len(room.Players))
+		log.Printf("[Room] Player %d disconnected, room %d now has %d player(s) waiting", playerID, room.RoomID, len(room.Players))
 		return
 	}
 }
@@ -243,7 +243,7 @@ func (m *RoomManager) CleanupEmptyRooms() {
 		room.mu.Lock()
 		if len(room.Players) == 0 {
 			room.mu.Unlock()
-			fmt.Printf("[Room] Removed empty room %d\n", room.RoomID)
+			log.Printf("[Room] Removed empty room %d", room.RoomID)
 			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
 		} else {
 			room.mu.Unlock()

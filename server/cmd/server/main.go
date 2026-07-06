@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -89,15 +91,15 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/wt" {
 		conn, err := h.wtServer.Upgrade(w, r)
 		if err != nil {
-			fmt.Printf("[WT] Upgrade error: %v\n", err)
+			log.Printf("[WT] Upgrade error: %v", err)
 			return
 		}
 		stream, err := conn.AcceptStream(r.Context())
 		if err != nil {
-			fmt.Printf("[WT] Stream accept error: %v\n", err)
+			log.Printf("[WT] Stream accept error: %v", err)
 			return
 		}
-		fmt.Printf("[WT] Stream accepted\n")
+		log.Printf("[WT] Stream accepted")
 
 		id := fmt.Sprintf("s%d", atomic.AddInt64(&sessionCounter, 1))
 		sess := network.NewSession(id, conn, stream)
@@ -106,7 +108,7 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		h.reg.Add(id, sess)
 
-		fmt.Printf("[WT] %s connected (total: %d)\n", id, h.reg.Count())
+		log.Printf("[WT] %s connected (total: %d)", id, h.reg.Count())
 
 		// Wait for session to close
 		<-conn.Context().Done()
@@ -117,7 +119,7 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.rm.Callbacks.OnSessionDisconnect != nil {
 			h.rm.Callbacks.OnSessionDisconnect(sess)
 		}
-		fmt.Printf("[WT] %s disconnected\n", id)
+		log.Printf("[WT] %s disconnected", id)
 		return
 	}
 
@@ -127,15 +129,15 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func initLog() *os.File {
 	path := os.Getenv("LOG_FILE")
 	if path == "" {
+		log.SetFlags(log.Ldate | log.Ltime)
 		return nil
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[Log] Failed to open %s: %v\n", path, err)
-		return nil
+		log.Fatalf("[Log] Failed to open %s: %v", path, err)
 	}
-	os.Stdout = f
-	os.Stderr = f
+	log.SetOutput(io.MultiWriter(os.Stdout, f))
+	log.SetFlags(log.Ldate | log.Ltime)
 	return f
 }
 
@@ -175,7 +177,7 @@ func main() {
 	if certHash == "" {
 		panic("Failed to read cert for hash")
 	}
-	fmt.Printf("[TLS] Certificate DER SHA-256: %s\n", certHash)
+	log.Printf("[TLS] Certificate DER SHA-256: %s", certHash)
 
 	// --- Room Manager ---
 	rm := room.NewRoomManager(cfg)
@@ -200,10 +202,10 @@ func main() {
 	}
 	wtServer.H3.Handler = handler
 
-	fmt.Printf("[Server] WebTransport listening on QUIC :%d\n", cfg.QUICPort)
+	log.Printf("[Server] WebTransport listening on QUIC :%d", cfg.QUICPort)
 	go func() {
 		if err := wtServer.ListenAndServeTLS(certFile, keyFile); err != nil {
-			fmt.Printf("[WT] Error: %v\n", err)
+			log.Printf("[WT] Error: %v", err)
 		}
 	}()
 
@@ -218,12 +220,12 @@ func main() {
 	// --- HTTP endpoints (TCP) ---
 	httpPort := cfg.HTTPPort
 	addr := fmt.Sprintf(":%d", httpPort)
-	fmt.Printf("[Server] HTTP health check on %s\n", addr)
+	log.Printf("[Server] HTTP health check on %s", addr)
 
 	// Read cert PEM for /cert-pem endpoint
 	certPEM, err := os.ReadFile(certFile)
 	if err != nil {
-		fmt.Printf("[HTTP] Warning: could not read cert for /cert-pem: %v\n", err)
+		log.Printf("[HTTP] Warning: could not read cert for /cert-pem: %v", err)
 	}
 
 	go func() {
@@ -251,7 +253,7 @@ func main() {
 			}))
 		}
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			fmt.Printf("[HTTP] Error: %v\n", err)
+			log.Printf("[HTTP] Error: %v", err)
 		}
 	}()
 
@@ -259,9 +261,9 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
-	fmt.Println("\n[Server] Shutting down...")
+	log.Println("[Server] Shutting down...")
 	rm.Cleanup()
 	ticker.Stop()
 	wtServer.Close()
-	println("[Server] Shutdown complete")
+	log.Println("[Server] Shutdown complete")
 }

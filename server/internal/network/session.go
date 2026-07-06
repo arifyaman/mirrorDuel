@@ -1,7 +1,7 @@
 package network
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/quic-go/webtransport-go"
 )
@@ -76,7 +76,7 @@ func (s *Session) SendMsg(msgType uint8, data []byte) {
 
 	_, err := s.stream.Write(full)
 	if err != nil {
-		fmt.Printf("[Session] Write error for %s: %v\n", s.id, err)
+		log.Printf("[Session] Write error for %s: %v", s.id, err)
 		s.connected = false
 	}
 }
@@ -105,7 +105,7 @@ func (s *Session) readLoop() {
 		tmp := make([]byte, 4096)
 		n, err := s.stream.Read(tmp)
 		if err != nil {
-			fmt.Printf("[Session] %s stream read error: %v (n=%d)\n", s.id, err, n)
+			log.Printf("[Session] %s stream read error: %v (n=%d)", s.id, err, n)
 			s.connected = false
 			return
 		}

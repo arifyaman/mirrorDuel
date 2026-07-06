@@ -1,7 +1,7 @@
 package room
 
 import (
-	"fmt"
+	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -147,14 +147,14 @@ func (s *GameSession) TickStep() {
 					ndz := dz / dist
 					dot := ndx*facingX + ndz*facingZ
 					if dot >= float32(math.Cos(50*math.Pi/180)) {
-						fmt.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield (cone)\n",
+						log.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield (cone)",
 							p.ID, p.PlayerOwner, player.ID)
 						hit = true
 						break
 					}
 				}
 				if player.IsDashing {
-					fmt.Printf("[DODGE] projectile %d (player %d) dodged by player %d's dash\n",
+					log.Printf("[DODGE] projectile %d (player %d) dodged by player %d's dash",
 						p.ID, p.PlayerOwner, player.ID)
 					hit = true
 					break
@@ -163,7 +163,7 @@ func (s *GameSession) TickStep() {
 				if player.Health < 0 {
 					player.Health = 0
 				}
-				fmt.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f\n",
+				log.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f",
 					p.ID, p.PlayerOwner, player.ID, player.X, player.Z, player.Health)
 				hit = true
 				break
