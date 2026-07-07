@@ -214,12 +214,18 @@ export class UI {
 
       iconSvg.appendChild(iconGroup);
 
+      const keyLabel = document.createElement('div');
+      const keys = ['R', 'Space', 'F'];
+      keyLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.6);font-family:monospace;font-size:10px;font-weight:bold;white-space:nowrap;';
+      keyLabel.textContent = keys[i];
+
       const label = document.createElement('div');
       label.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);font-family:monospace;font-size:10px;white-space:nowrap;';
       label.textContent = 'Skill ' + (i + 1);
 
       wrapper.appendChild(svg);
       wrapper.appendChild(iconSvg);
+      wrapper.appendChild(keyLabel);
       wrapper.appendChild(label);
       this.container.appendChild(wrapper);
 
