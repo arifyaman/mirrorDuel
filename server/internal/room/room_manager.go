@@ -226,7 +226,6 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 		delete(room.Players, playerID)
 
-		// Only notify remaining players if room is empty (no one left to rematch)
 		if len(room.Players) == 0 {
 			log.Printf("[Room] Empty room %d removed", room.RoomID)
 			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)

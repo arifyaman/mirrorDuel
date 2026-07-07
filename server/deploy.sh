@@ -12,6 +12,9 @@ go build -o main ./cmd/server/
 echo "==> Creating remote directory..."
 ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p $VPS_PATH"
 
+echo "==> Stopping server..."
+ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "sudo systemctl stop mirrorduel" || true
+
 echo "==> Copying binary..."
 scp -P "$VPS_PORT" main "$VPS_USER@$VPS_HOST:$VPS_PATH/"
 

@@ -105,6 +105,41 @@ export class Physics {
         sd.active = false;
       }
     }
+
+    // Destroy entities for players no longer in snapshot
+    const activeIds = new Set(players.map(p => p.id));
+    for (const [id] of this.playerEntities) {
+      if (!activeIds.has(id)) {
+        this.destroyPlayerEntity(id);
+      }
+    }
+  }
+
+  destroyPlayerEntity(id) {
+    const entity = this.playerEntities.get(id);
+    if (entity) {
+      if (entity.parent) entity.parent.removeChild(entity);
+      entity.destroy();
+      this.playerEntities.delete(id);
+    }
+    const indicator = this.indicatorEntities.get(id);
+    if (indicator) {
+      if (indicator.parent) indicator.parent.removeChild(indicator);
+      this.indicatorEntities.delete(id);
+    }
+    const light = this.playerLights.get(id);
+    if (light) {
+      if (light.parent) light.parent.removeChild(light);
+      this.playerLights.delete(id);
+    }
+    const shield = this._playerShields.get(id);
+    if (shield) {
+      if (shield.entity.parent) shield.entity.parent.removeChild(shield.entity);
+      shield.entity.destroy();
+      this._playerShields.delete(id);
+    }
+    this._prevPlayerPos.delete(id);
+    this._playerFlash.delete(id);
   }
 
   _createShieldEntity(id, color) {
