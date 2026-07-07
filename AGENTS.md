@@ -197,6 +197,32 @@ mirrorDuel/
 - **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32][shieldCooldown: f32]` (33 bytes)
 - **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
 
+## Git & Deployment
+
+### Push Policy
+AI agents must **never** `git push` after committing unless explicitly asked by the user. Commits are staged and committed locally; pushing requires user instruction.
+
+### Pre-Push Hook (`.githooks/pre-push`)
+On `git push`, the pre-push hook automatically runs `server/deploy.sh` which:
+1. Builds the Go server binary (`go build`)
+2. Copies binary + `.env.production` to VPS (`/home/debian/apps/mirrorDuel/server`)
+3. Builds the client (`cd ../client && npm run build`)
+4. Deploys client build to VPS (`/home/debian/apps/mirrorDuel/ui`)
+5. Reloads nginx
+6. Updates systemd service (logs to `server.log`, not journald)
+7. Restarts `mirrorduel` service
+
+No confirmation or interactivity checks — deploy runs on every push.
+
+### Project Structure (additions)
+```
+mirrorDuel/
+├── .githooks/
+│   └── pre-push              # Auto-deploy hook (builds + deploys server & client)
+├── server/
+│   └── deploy.sh             # Deploy script (binary, client, systemd, nginx)
+```
+
 ## Development Workflow
 
 ### Run Server (Go + WebTransport/QUIC)
