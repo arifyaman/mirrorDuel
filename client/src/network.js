@@ -12,6 +12,5 @@ export class Network {
   onDisconnect() {
     this.game.physics.cleanupPlayerEntities();
     this.game.recreateHUD();
-    setTimeout(() => this.game.networkClient.connect(), 1000);
   }
 }
