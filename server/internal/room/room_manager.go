@@ -214,23 +214,26 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 
 		delete(room.Players, playerID)
 
-		// Only notify remaining players if room is empty (no one left to rematch)
-		if len(room.Players) == 0 {
-			log.Printf("[Room] Empty room %d removed", room.RoomID)
-			m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
-			room.mu.Unlock()
-
-			if m.Callbacks.OnSessionDisconnect != nil {
-				m.Callbacks.OnSessionDisconnect(session)
+		// Notify remaining players and close the room
+		if len(room.Players) > 0 {
+			log.Printf("[Room] Player %d disconnected, notifying %d remaining player(s) in room %d",
+				playerID, len(room.Players), room.RoomID)
+			for _, p := range room.Players {
+				if p.Session != nil {
+					p.Session.SendDisconnect()
+				}
 			}
-
-			log.Printf("[Room] Player %d disconnected", playerID)
-			return
 		}
 
+		log.Printf("[Room] Room %d removed", room.RoomID)
+		m.Rooms = append(m.Rooms[:i], m.Rooms[i+1:]...)
 		room.mu.Unlock()
 
-		log.Printf("[Room] Player %d disconnected, room %d now has %d player(s) waiting", playerID, room.RoomID, len(room.Players))
+		if len(room.Players) == 0 && m.Callbacks.OnSessionDisconnect != nil {
+			m.Callbacks.OnSessionDisconnect(session)
+		}
+
+		log.Printf("[Room] Player %d disconnected", playerID)
 		return
 	}
 }
