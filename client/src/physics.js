@@ -1,4 +1,4 @@
-import { Color, Entity, Mesh, MeshInstance, ShaderMaterial, StandardMaterial, Vec3, BLEND_NORMAL, BLEND_ADDITIVE, CULLFACE_NONE, SEMANTIC_POSITION, SEMANTIC_TEXCOORD0 } from 'playcanvas';
+import { Color, Entity, ShaderMaterial, StandardMaterial, Vec3, BLEND_NORMAL, CULLFACE_NONE, SEMANTIC_POSITION, SEMANTIC_NORMAL } from 'playcanvas';
 
 const DT = 0.01667;
 
@@ -14,7 +14,6 @@ export class Physics {
     this._dashTrails = [];
     this._prevPlayerPos = new Map();
     this._playerShields = new Map();
-    this._slashes = [];
     this.app = app;
   }
 
@@ -141,147 +140,6 @@ export class Physics {
     }
     this._prevPlayerPos.delete(id);
     this._playerFlash.delete(id);
-  }
-
-  spawnCrescentSlash(options = {}) {
-    const {
-      position = { x: 0, y: 0.05, z: 0 },
-      facingAngle = 0,
-      coreColor = [0.45, 0.9, 1],
-      edgeColor = [0.05, 0.2, 0.47],
-      radius = 1.3,
-      arcAngle = 110,
-      duration = 0.35
-    } = options;
-
-    const arcRad = arcAngle * Math.PI / 180;
-    const segments = 30;
-    const thickness = 0.55;
-    const taperPower = 1.3;
-
-    const positions = [];
-    const uvs = [];
-    const indices = [];
-
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const theta = -arcRad / 2 + t * arcRad;
-      const taper = Math.pow(Math.sin(t * Math.PI), taperPower);
-      const rOuter = radius;
-      const rInner = radius - thickness * taper;
-      const sinT = Math.sin(theta), cosT = Math.cos(theta);
-      positions.push(sinT * rOuter, 0, -cosT * rOuter);
-      uvs.push(t, 1);
-      positions.push(sinT * rInner, 0, -cosT * rInner);
-      uvs.push(t, 0);
-    }
-
-    for (let i = 0; i < segments; i++) {
-      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
-      indices.push(a, b, c, b, d, c);
-    }
-
-    const mesh = new Mesh(this.app.graphicsDevice);
-    mesh.setPositions(positions, 3);
-    mesh.setUvs(0, uvs, 2);
-    mesh.setIndices(indices);
-    mesh.update(this.app.graphicsDevice);
-
-    const vshader = `
-      attribute vec3 aPosition;
-      attribute vec2 aUv0;
-      uniform mat4 matrix_model;
-      uniform mat4 matrix_viewProjection;
-      varying vec2 vUv;
-      void main(void) {
-        vUv = aUv0;
-        gl_Position = matrix_viewProjection * matrix_model * vec4(aPosition, 1.0);
-      }
-    `;
-
-    const fshader = `
-      precision mediump float;
-      varying vec2 vUv;
-      uniform float uTime;
-      uniform float uAlpha;
-      uniform float uSweep;
-      uniform vec3 uColorCore;
-      uniform vec3 uColorEdge;
-      void main(void) {
-        float u = vUv.x;
-        float v = vUv.y;
-        float sweepEdge = 0.10;
-        float reveal = smoothstep(u + sweepEdge, u - sweepEdge, uSweep);
-        float endFade = smoothstep(0.0, 0.05, u) * smoothstep(1.0, 0.95, u);
-        vec3 col = mix(uColorEdge, uColorCore, pow(v, 1.6));
-        float rim = pow(v, 4.0) * 1.4;
-        col += rim * uColorCore;
-        float streak = sin(u * 40.0 - uTime * 9.0) * 0.5 + 0.5;
-        streak = pow(streak, 6.0);
-        col += streak * 0.35 * uColorCore;
-        float alpha = reveal * endFade * uAlpha;
-        alpha *= smoothstep(0.0, 0.25, v);
-        gl_FragColor = vec4(col, alpha);
-      }
-    `;
-
-    const mat = new ShaderMaterial({
-      uniqueName: 'crescentSlash',
-      attributes: { aPosition: SEMANTIC_POSITION, aUv0: SEMANTIC_TEXCOORD0 },
-      vertexGLSL: vshader,
-      fragmentGLSL: fshader,
-    });
-    mat.blendType = BLEND_ADDITIVE;
-    mat.depthWrite = false;
-    mat.cull = CULLFACE_NONE;
-    mat.update();
-
-    const meshInstance = new MeshInstance(mesh, mat);
-    const entity = new Entity('slash');
-    entity.addComponent('render');
-    entity.render.meshInstances = [meshInstance];
-    entity.setPosition(position.x, position.y, position.z);
-    entity.setEulerAngles(0, facingAngle * (180 / Math.PI), 0);
-    entity.setLocalScale(0.5, 1, 0.5);
-    this.app.root.addChild(entity);
-
-    this._slashes.push({
-      entity, mat,
-      elapsed: 0, duration,
-      sweepDuration: duration * 0.45,
-      holdDuration: duration * 0.15,
-      fadeDuration: duration * 0.40,
-      scaleDuration: 0.09,
-    });
-  }
-
-  updateSlashes(dt) {
-    for (let i = this._slashes.length - 1; i >= 0; i--) {
-      const s = this._slashes[i];
-      s.elapsed += dt;
-      s.mat.setParameter('uTime', s.elapsed);
-
-      const scaleT = Math.min(s.elapsed / s.scaleDuration, 1);
-      const c1 = 1.70158, c3 = c1 + 1;
-      const easeOutBack = (t) => 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-      const scale = 0.5 + 0.5 * easeOutBack(scaleT);
-      s.entity.setLocalScale(scale, 1, scale);
-
-      let sweep = s.elapsed < s.sweepDuration ? s.elapsed / s.sweepDuration : 1;
-      let alpha = 1;
-      if (s.elapsed > s.sweepDuration + s.holdDuration) {
-        const fadeT = (s.elapsed - s.sweepDuration - s.holdDuration) / s.fadeDuration;
-        alpha = 1 - Math.min(fadeT, 1);
-      }
-      s.mat.setParameter('uSweep', sweep);
-      s.mat.setParameter('uAlpha', alpha);
-
-      if (s.elapsed >= s.duration) {
-        if (s.entity.parent) s.entity.parent.removeChild(s.entity);
-        s.entity.destroy();
-        this._slashes.splice(i, 1);
-      }
-    }
   }
 
   _createShieldEntity(id, color) {
