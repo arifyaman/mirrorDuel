@@ -54,6 +54,7 @@ export class Game {
     this.myShieldCooldown = 0;
     this._prevMyCooldown = 0;
     this._prevHealth = {};
+    this._prevCooldown = {};
     this._myPlayerPos = { x: 0, z: 0 };
     this._myPlayerAngle = 0;
     this._cameraTarget = { x: 0, z: 0 };
@@ -101,10 +102,27 @@ export class Game {
     }
 
     // Detect spell fire: cooldown jumps from 0 to >0
-    if (myPlayer && this._prevMyCooldown <= 0 && myPlayer.cooldown > 0) {
-      if (this.gameTitle) this.gameTitle.triggerJump();
+    for (const p of players) {
+      const prev = this._prevCooldown[p.id];
+      if (prev !== undefined && prev <= 0 && p.cooldown > 0) {
+        const isMe = p.id === this.network.myPlayerId;
+        if (isMe && this.gameTitle) this.gameTitle.triggerJump();
+        const dirX = Math.sin(p.angle);
+        const dirZ = Math.cos(p.angle);
+        const playerColors = {
+          1: { core: [1, 0.35, 0.2], edge: [0.4, 0.05, 0.02] },
+          2: { core: [0.3, 0.85, 1], edge: [0.02, 0.05, 0.4] },
+        };
+        const col = playerColors[p.id] || playerColors[1];
+        this.physics.spawnCrescentSlash({
+          position: { x: p.x + dirX * 1.1, y: -0.1, z: p.z + dirZ * 1.1 },
+          facingAngle: p.angle + Math.PI,
+          coreColor: col.core,
+          edgeColor: col.edge,
+        });
+      }
+      this._prevCooldown[p.id] = p.cooldown;
     }
-    this._prevMyCooldown = this.myCooldown;
 
     // Detect hits: health drop on any player
     for (const p of players) {
@@ -156,6 +174,7 @@ export class Game {
     this.physics.updateProjectiles();
     this.physics.updateExplosions();
     this.physics.updateDashTrails();
+    this.physics.updateSlashes(dt);
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;
