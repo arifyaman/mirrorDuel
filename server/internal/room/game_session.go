@@ -237,5 +237,35 @@ func (s *GameSession) AddPlayer(id int, name string, session SessionIface) *Play
 	player.GameSession = s
 	player.Session = session
 	s.Players[id] = player
+
+	if len(s.Players) == 2 {
+		s.Reset()
+	}
+
 	return player
+}
+
+// Reset resets the game state — both players to initial positions,
+// full health, no cooldowns, projectiles cleared.
+func (s *GameSession) Reset() {
+	for _, p := range s.Players {
+		if p.ID == 1 {
+			p.X = -2
+			p.Z = -0.2
+			p.Angle = float32(math.Pi / 2) // face +X
+		} else {
+			p.X = 2
+			p.Z = -0.2
+			p.Angle = float32(-math.Pi / 2) // face -X
+		}
+		p.TargetX = p.X
+		p.TargetZ = p.Z
+		p.Health = 100
+		p.Cooldown = 0
+		p.DashCooldown = 0
+		p.ShieldCooldown = 0
+		p.IsDashing = false
+		p.ShieldActive = false
+	}
+	s.Projectiles = nil
 }

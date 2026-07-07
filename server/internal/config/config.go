@@ -20,7 +20,7 @@ type Config struct {
 type DashConfig struct {
 	Cooldown     float32
 	Distance     float32
-	Duration     int     // ticks
+	Duration     float32 // seconds
 	EaseOutStart float32 // 0-1, fraction of dash when deceleration begins
 }
 
@@ -61,9 +61,9 @@ func Default() *Config {
 			BurstDuration: 1.5,
 		},
 		Dash: DashConfig{
-			Cooldown: .2,
-			Distance: 4,
-			Duration: 20,
+			Cooldown:     7,
+			Distance:     4,
+			Duration:     20.0 / 60.0,
 			EaseOutStart: 0.2,
 		},
 		Shield: ShieldConfig{

@@ -47,12 +47,12 @@ type Player struct {
 	Session        SessionIface
 	Config         *config.Config
 
-	IsDashing     bool
-	DashStartTick int
-	DashStartX    float32
-	DashStartZ    float32
-	DashTargetX   float32
-	DashTargetZ   float32
+	IsDashing    bool
+	DashElapsed  float32
+	DashStartX   float32
+	DashStartZ   float32
+	DashTargetX  float32
+	DashTargetZ  float32
 
 	ShieldCooldown float32
 	ShieldActive   bool
@@ -213,7 +213,7 @@ func (p *Player) startDash() {
 	p.JustDashed = true
 	p.IsDashing = true
 	p.DashCooldown = p.Config.Dash.Cooldown
-	p.DashStartTick = p.GameSession.tick
+	p.DashElapsed = 0
 	p.DashStartX = p.X
 	p.DashStartZ = p.Z
 
@@ -239,12 +239,12 @@ func (p *Player) startDash() {
 }
 
 func (p *Player) processDash(dt float32) {
-	elapsed := p.GameSession.tick - p.DashStartTick
+	p.DashElapsed += dt
 	duration := p.Config.Dash.Duration
 	if duration <= 0 {
 		duration = 1
 	}
-	t := float64(elapsed) / float64(duration)
+	t := float64(p.DashElapsed / duration)
 	if t >= 1 {
 		t = 1
 	}
