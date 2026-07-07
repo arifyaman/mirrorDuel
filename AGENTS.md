@@ -29,8 +29,8 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Activation**: Spacebar (flag 0x02)
 - **Cooldown**: 7 seconds (separate from fire cooldown)
 - **Distance**: 4 units in facing direction
-- **Duration**: 20 ticks (~333ms) with ease-out curve
-- **Curve**: Piecewise ease-out — constant speed until `EaseOutStart` (configurable, default 0.5), then ease-out quad deceleration
+- **Duration**: ~0.333 seconds (20/60) with ease-out curve
+- **Curve**: Piecewise ease-out — constant speed until `EaseOutStart` (configurable, default 0.2), then ease-out quad deceleration
 - **Movement**: Player can still aim/rotate and queue WASD movement while dashing (updates angle + TargetX/Z for post-dash continuation)
 - **Trail Visual**: Ghostly after-images — player-colored semi-transparent boxes at each position along path, drifting upward+outward with velocity decay, shrinking and fading over 600ms
 - **Evasion**: Player dodges all projectiles while dashing (checked before damage in collision loop, after shield block)
@@ -53,10 +53,11 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 
 ### HUD
 - **3 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
-  - Fire (Skill 1): Crosshair icon, red ring, 3s cooldown
-  - Dash (Skill 2): Lightning bolt icon, gold ring, 7s cooldown
-  - Shield (Skill 3): Shield icon with cross, blue ring, 7s cooldown (fully implemented)
+  - Fire (Skill 1): Crosshair icon, red ring, 3s cooldown, **R** key
+  - Dash (Skill 2): Lightning bolt icon, gold ring, 7s cooldown, **Space** key
+  - Shield (Skill 3): Shield icon with cross, blue ring, 7s cooldown, **F** key
 - **Cooldown Display**: Animated ring (per-skill max values [3, 7, 7]), text shows time remaining or skill name when available
+- **Key Labels**: R/Space/F shown above each skill icon
 - **Health Bars**: 3D world-space bars above each player, hidden when dead
 
 ### Scene Elements
@@ -130,6 +131,7 @@ mirrorDuel/
 - **Red/Blue**: Player 1 = red, Player 2 = blue
 - **Indicator**: Green strip showing forward direction (opponent only)
 - **Projectile Entities**: Spawn at start position, compute position from tick delta
+- **Entity Cleanup**: `applyPlayers()` destroys entities for player IDs absent from snapshot (mirrors `applyProjectiles()` pattern); disconnecting opponents disappear naturally
 
 ## Server Architecture
 
@@ -146,12 +148,14 @@ mirrorDuel/
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
 - **Mirror Cooldowns**: Each skill activation reduces only the same skill on opponent by 50% (fire→fire, dash→dash, shield→shield)
+- **Room Reset**: When 2nd player joins, `Reset()` places both players at spawn positions (P1: -2/-0.2, P2: 2/-0.2) with full health, zero cooldowns, cleared projectiles; P1 faces +X (π/2), P2 faces -X (-π/2)
 
 ### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
+- **Player ID**: Picks first free slot from {1, 2} (not `len+1`), so either player leaving and rejoining works correctly
 - **Input Processing**: Queues inputs, triggers skill activation
 - **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room
-- **Disconnect**: Cleans up room, notifies opponent
+- **Disconnect**: Removes player from room, keeps room open for replacement (only deletes empty rooms)
 
 ### `internal/network/protocol.go`
 - **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
@@ -167,7 +171,8 @@ mirrorDuel/
 ### `internal/config/config.go`
 - **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
-- **Dash**: Cooldown(7), Distance(4), Duration(20), EaseOutStart(0.5)
+- **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
+- **All durations in seconds** (no tick-based values)
 
 ## Network Protocol
 
@@ -205,12 +210,13 @@ AI agents must **never** `git push` after committing unless explicitly asked by 
 ### Pre-Push Hook (`.githooks/pre-push`)
 On `git push`, the pre-push hook automatically runs `server/deploy.sh` which:
 1. Builds the Go server binary (`go build`)
-2. Copies binary + `.env.production` to VPS (`/home/debian/apps/mirrorDuel/server`)
-3. Builds the client (`cd ../client && npm run build`)
-4. Deploys client build to VPS (`/home/debian/apps/mirrorDuel/ui`)
-5. Reloads nginx
-6. Updates systemd service (logs to `server.log`, not journald)
-7. Restarts `mirrorduel` service
+2. Stops the running service (so binary can be overwritten)
+3. Copies binary + `.env.production` to VPS (`/home/debian/apps/mirrorDuel/server`)
+4. Builds the client (`cd ../client && npm run build`)
+5. Deploys client build to VPS (`/home/debian/apps/mirrorDuel/ui`)
+6. Reloads nginx
+7. Updates systemd service (logs to `server.log`, not journald)
+8. Restarts `mirrorduel` service
 
 No confirmation or interactivity checks — deploy runs on every push.
 
