@@ -119,16 +119,28 @@ func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult 
 		log.Printf("[Room] Created room %d", roomID)
 	}
 
-	playerID := len(room.Players) + 1
+	var playerID int
+	for _, id := range []int{1, 2} {
+		if _, taken := room.Players[id]; !taken {
+			playerID = id
+			break
+		}
+	}
+	if playerID == 0 {
+		log.Printf("[Room] %s tried to join full room %d", playerName, room.RoomID)
+		return nil
+	}
 	_ = room.AddPlayer(playerID, playerName, session)
 	session.(*network.Session).SetPlayerID(playerID)
 
 	// Find opponent
 	var opponentName string
-	if other, ok := room.Players[playerID+1]; ok {
-		opponentName = other.Name
-	} else if other, ok := room.Players[playerID-1]; ok {
-		opponentName = other.Name
+	for _, id := range []int{1, 2} {
+		if id != playerID {
+			if other, ok := room.Players[id]; ok {
+				opponentName = other.Name
+			}
+		}
 	}
 
 	log.Printf("[Room] Player %d (%s) joined room %d", playerID, playerName, room.RoomID)
