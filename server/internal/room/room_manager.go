@@ -2,6 +2,7 @@ package room
 
 import (
 	"log"
+	"sync"
 
 	"mirror-duel-server-go/internal/config"
 	"mirror-duel-server-go/internal/network"
@@ -24,6 +25,7 @@ type RoomCallbacks struct {
 
 // RoomManager handles matchmaking, input routing, tick loop, and state broadcast.
 type RoomManager struct {
+	mu                     sync.Mutex
 	Config                 *config.Config
 	Rooms                  []*GameSession
 	NextRoomID             int
@@ -69,7 +71,8 @@ func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 	roomCreated := network.EncodeRoomCreated(result.RoomID, uint8(result.PlayerID), result.OpponentName)
 	session.SendRoomCreated(roomCreated)
 
-	// Also send current snapshot to both players in the room
+	// Send current snapshot to both players in the room
+	m.mu.Lock()
 	for _, room := range m.Rooms {
 		if room.RoomID == int(result.RoomID) {
 			tick, players, projectiles := room.GetSnapshot()
@@ -82,6 +85,7 @@ func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 			break
 		}
 	}
+	m.mu.Unlock()
 }
 
 type JoinResult struct {
@@ -91,6 +95,8 @@ type JoinResult struct {
 }
 
 func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// Priority 1: Find a room with exactly 1 player waiting for a duel
 	var room *GameSession
 	for _, r := range m.Rooms {
@@ -150,6 +156,9 @@ func (m *RoomManager) handlePlayerInput(session SessionIface, payload []byte) {
 		return
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Find the player for this session
 	for _, room := range m.Rooms {
 		for _, player := range room.Players {
@@ -172,7 +181,13 @@ func (m *RoomManager) Update(dt float32) {
 
 func (m *RoomManager) tickStep() {
 	m.TickCounter++
-	for _, room := range m.Rooms {
+
+	m.mu.Lock()
+	rooms := make([]*GameSession, len(m.Rooms))
+	copy(rooms, m.Rooms)
+	m.mu.Unlock()
+
+	for _, room := range rooms {
 		room.TickStep()
 	}
 	// Cleanup empty rooms every 30 ticks (~0.5 seconds)
@@ -183,6 +198,8 @@ func (m *RoomManager) tickStep() {
 }
 
 func (m *RoomManager) broadcast() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, room := range m.Rooms {
 		if len(room.Players) == 0 {
 			continue
@@ -203,6 +220,9 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 	if playerID == 0 {
 		return
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	for i := len(m.Rooms) - 1; i >= 0; i-- {
 		room := m.Rooms[i]
@@ -241,6 +261,8 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 // CleanupEmptyRooms removes rooms with no players connected.
 // Called periodically during the tick step to prevent room accumulation.
 func (m *RoomManager) CleanupEmptyRooms() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i := len(m.Rooms) - 1; i >= 0; i-- {
 		room := m.Rooms[i]
 		room.mu.Lock()
@@ -256,11 +278,15 @@ func (m *RoomManager) CleanupEmptyRooms() {
 
 // Cleanup removes all rooms.
 func (m *RoomManager) Cleanup() {
+	m.mu.Lock()
 	m.Rooms = nil
+	m.mu.Unlock()
 }
 
 // PlayerCount returns the total number of connected players.
 func (m *RoomManager) PlayerCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	count := 0
 	for _, room := range m.Rooms {
 		count += len(room.Players)
