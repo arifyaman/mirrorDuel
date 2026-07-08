@@ -56,6 +56,7 @@ this.network = new Network(this.networkClient, this);
     this._prevMyCooldown = 0;
     this._prevMySlashCooldown = 0;
     this._prevPlayerSlashCooldowns = {};
+    this._slashShown = {};
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
     this._myPlayerAngle = 0;
@@ -98,25 +99,29 @@ this.network = new Network(this.networkClient, this);
       this.myCooldown = Math.max(0, myPlayer.cooldown);
       this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
       this.myShieldCooldown = Math.max(0, myPlayer.shieldCooldown);
-     this.mySlashCooldown = Math.max(0, myPlayer.slashCooldown);
+      this.mySlashCooldown = Math.max(0, myPlayer.slashCooldown);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
       this._myPlayerAngle = myPlayer.angle;
     }
 
-    // Detect slash activations for all players (same pattern as fire detection)
+    // Detect slash activations for all players — persistent flag until cooldown resets
     for (const p of players) {
       const prevSlash = this._prevPlayerSlashCooldowns[p.id] || 0;
-      if (prevSlash <= 0 && p.slashCooldown > 0) {
+      if (p.slashCooldown > 0 && !this._slashShown[p.id]) {
         const spawnDist = 0.3;
         const px = p.x + Math.sin(p.angle) * spawnDist;
         const pz = p.z + Math.cos(p.angle) * spawnDist;
-        const pos = new Vec3(px, 0.05, pz);
+        const pos = new Vec3(px, -0.25, pz);
         this.physics.spawnCrescentSlash({
           position: pos,
           facingAngle: p.angle,
           coreColor: p.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
         });
+        this._slashShown[p.id] = true;
+      }
+      if (prevSlash > 0 && p.slashCooldown <= 0) {
+        this._slashShown[p.id] = false;
       }
       this._prevPlayerSlashCooldowns[p.id] = p.slashCooldown;
     }

@@ -44,20 +44,32 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Visual**: Voronoi crack-pattern sphere with 100° front-facing cone, opening animation (0.3s ease-out), fully open, then closing animation (0.3s ease-in)
 - **Shield blocks projectiles**: Server checks `ShieldActive` and dot product (facing vs direction to projectile) ≥ cos(50°) before dealing damage; blocked projectiles are destroyed with no damage dealt
 
+### Slash Skill
+- **Activation**: Mousedown (flag 0x08)
+- **Cooldown**: 0.5 seconds
+- **Damage**: 2 (instant)
+- **Hit Range**: 2.5 units radius
+- **Cone Angle**: 110° front-facing
+- **VFX**: Crescent arc mesh with additive shader (glow, streaks, sweep reveal, fade), spawns 0.3 units forward of player
+- **Server-authoritative**: Hit detection, cooldown, dash dodge, shield block all on server
+- **Mirror mechanic**: Slash activation reduces opponent's slash cooldown by 50%
+
 ### Mirror Cooldown Mechanic
-- When ANY skill activates (fire, dash, OR shield), ALL cooldowns on the opponent are reduced by 50%
+- When ANY skill activates (fire, dash, shield, OR slash), ALL cooldowns on the opponent are reduced by 50%
 - Fire activation reduces opponent's fire cooldown by 50%
 - Dash activation reduces opponent's dash cooldown by 50%
 - Shield activation reduces opponent's shield cooldown by 50%
+- Slash activation reduces opponent's slash cooldown by 50%
 - Each skill only mirrors the same skill on the opponent (not cross-skill)
 
 ### HUD
-- **3 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
+- **4 Skill Indicators**: Triangle layout (bottom-right), each with custom SVG icon and cooldown ring
   - Fire (Skill 1): Crosshair icon, red ring, 3s cooldown, **R** key
   - Dash (Skill 2): Lightning bolt icon, gold ring, 7s cooldown, **Space** key
   - Shield (Skill 3): Shield icon with cross, blue ring, 7s cooldown, **F** key
-- **Cooldown Display**: Animated ring (per-skill max values [3, 7, 7]), text shows time remaining or skill name when available
-- **Key Labels**: R/Space/F shown above each skill icon
+  - Slash (Skill 4): Scythe icon, cyan ring, 0.5s cooldown, **Mousedown**
+- **Cooldown Display**: Animated ring (per-skill max values [3, 7, 7, 0.5]), text shows time remaining or skill name when available
+- **Key Labels**: R/Space/F/M shown above each skill icon
 - **Health Bars**: 3D world-space bars above each player, hidden when dead
 
 ### Scene Elements
@@ -92,7 +104,7 @@ mirrorDuel/
 │       ├── input.js                # WASD keys, mouse tracking, raycasting
 │       ├── game.js                 # Main game loop, network callbacks, camera follow logic
 │       ├── network.js              # Network session tracking
-│       ├── ui.js                   # 3D health bars, 3-skill cooldown HUD with SVG icons and screen flash
+│       ├── ui.js                   # 3D health bars, 4-skill cooldown HUD with SVG icons and screen flash
 │       └── game-title.js           # Title screen animation
 └── server/
     ├── cmd/server/             # Entry: WebTransport server, HTTP health check, game loop
@@ -108,7 +120,7 @@ mirrorDuel/
 ### `index.html`
 - **Scene**: Floor with grid, camera, directional light, TAA with bloom
 - **Render Pipeline**: TAA (jitter=1), ACES tone mapping, bloom (0.1)
-- **Input**: Key tracking (WASD, R for fire, Space for dash), mouse raycasting to ground plane
+- **Input**: Key tracking (WASD, R for fire, Space for dash, F for shield), mousedown for slash, mouse raycasting to ground plane
 - **Game Loop**: Sends inputs to server, receives snapshots, updates HUD
 - **Rendering**: Receives server snapshots, creates/updates player and projectile entities
 
@@ -119,11 +131,17 @@ mirrorDuel/
 - **Input Queue**: Batches frames, sends every 16ms
 - **Auto-reconnect**: 2-second retry on disconnect
 
+### `src/input.js`
+- **Slash Input**: mousedown/mouseup sets `inputSlash` flag (0x08) for slash skill activation
+
+### `src/game.js`
+- **Slash VFX**: Detects slash cooldown > 0 with persistent `_slashShown` flag per player to ensure VFX always displays even on late-arriving snapshots. Resets flag when cooldown drops to 0.
+
 ### `src/network/protocol.js`
 - **Binary Encoding**: `encodePlayerInput()` - 13 bytes (tick:2, moveX:1, moveZ:1, mouseX:4, mouseY:4, flags:1)
-  - flags: `0x01` = fire, `0x02` = dash, `0x04` = shield
+  - flags: `0x01` = fire, `0x02` = dash, `0x04` = shield, `0x08` = slash
 - **Binary Decoding**: `decodeStateSnapshot()` - variable length, players + projectiles
-  - Player: 33 bytes (1 u8 + 8 f32) — includes shieldCooldown
+  - Player: 37 bytes (1 u8 + 9 f32) — includes shieldCooldown, slashCooldown
 - **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), DISCONNECT(255)
 
 ### Entity System
@@ -131,6 +149,7 @@ mirrorDuel/
 - **Red/Blue**: Player 1 = red, Player 2 = blue
 - **Indicator**: Green strip showing forward direction (opponent only)
 - **Projectile Entities**: Spawn at start position, compute position from tick delta
+- **Slash VFX**: Crescent mesh with additive shader, sweep reveal animation, fade out — spawned on cooldown transition, persists until cooldown resets
 - **Entity Cleanup**: `applyPlayers()` destroys entities for player IDs absent from snapshot (mirrors `applyProjectiles()` pattern); disconnecting opponents disappear naturally
 
 ## Server Architecture
@@ -147,7 +166,8 @@ mirrorDuel/
 - **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
-- **Mirror Cooldowns**: Each skill activation reduces only the same skill on opponent by 50% (fire→fire, dash→dash, shield→shield)
+- **Slash**: Instant hit detection (110° cone, 2.5 radius), mirror cooldown reduction
+- **Mirror Cooldowns**: Each skill activation reduces only the same skill on opponent by 50% (fire→fire, dash→dash, shield→shield, slash→slash)
 - **Room Reset**: When 2nd player joins, `Reset()` places both players at spawn positions (P1: -2/-0.2, P2: 2/-0.2) with full health, zero cooldowns, cleared projectiles; P1 faces +X (π/2), P2 faces -X (-π/2)
 
 ### `internal/room/room_manager.go`
@@ -159,7 +179,7 @@ mirrorDuel/
 
 ### `internal/network/protocol.go`
 - **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
-- **Encoding**: `encodeStateSnapshot()` - 33 bytes per player, 31 bytes per projectile
+- **Encoding**: `encodeStateSnapshot()` - 37 bytes per player, 31 bytes per projectile
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
 - **Read Loop**: Handles multiple coalesced messages per read
 
@@ -172,6 +192,7 @@ mirrorDuel/
 - **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 - **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
+- **Slash**: Cooldown(0.5), Damage(2), HitRadius(2.5), ConeAngle(110)
 - **All durations in seconds** (no tick-based values)
 
 ## Network Protocol
@@ -189,7 +210,7 @@ mirrorDuel/
 | 1 | JOIN_ROOM | variable | `[nameLen: 1][name: bytes]` |
 | 2 | PLAYER_INPUT | 13 | `[tick: u16][moveX: i8][moveZ: i8][mouseX: f32][mouseY: f32][flags: u8]` |
 
-`flags`: `0x01` = fire, `0x02` = dash, `0x04` = shield
+`flags`: `0x01` = fire, `0x02` = dash, `0x04` = shield, `0x08` = slash
 
 ### Server → Client
 | Type | Name | Size | Format |
@@ -199,7 +220,7 @@ mirrorDuel/
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
-- **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32][shieldCooldown: f32]` (33 bytes)
+- **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32][shieldCooldown: f32][slashCooldown: f32]` (37 bytes, 9 floats)
 - **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
 
 ## Git & Deployment
