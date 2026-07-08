@@ -55,7 +55,7 @@ this.network = new Network(this.networkClient, this);
     this.mySlashCooldown = 0;
     this._prevMyCooldown = 0;
     this._prevMySlashCooldown = 0;
-    this._prevOpponentSlashCooldown = 0;
+    this._prevPlayerSlashCooldowns = {};
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
     this._myPlayerAngle = 0;
@@ -98,39 +98,35 @@ this.network = new Network(this.networkClient, this);
       this.myCooldown = Math.max(0, myPlayer.cooldown);
       this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
       this.myShieldCooldown = Math.max(0, myPlayer.shieldCooldown);
-      this.mySlashCooldown = Math.max(0, myPlayer.slashCooldown);
+     this.mySlashCooldown = Math.max(0, myPlayer.slashCooldown);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
       this._myPlayerAngle = myPlayer.angle;
     }
 
-    // Detect slash activation: cooldown jumps from 0 to >0
-    if (myPlayer && this._prevMySlashCooldown <= 0 && myPlayer.slashCooldown > 0) {
-      const pos = new Vec3(myPlayer.x, 0.05, myPlayer.z);
-      this.physics.spawnCrescentSlash({
-        position: pos,
-        facingAngle: myPlayer.angle,
-        coreColor: myPlayer.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
-      });
-    }
-    // Detect opponent slash activation
-    const opponent = players.find(p => p.id !== this.network.myPlayerId);
-    if (opponent && this._prevOpponentSlashCooldown <= 0 && opponent.slashCooldown > 0) {
-      const pos = new Vec3(opponent.x, 0.05, opponent.z);
-      this.physics.spawnCrescentSlash({
-        position: pos,
-        facingAngle: opponent.angle,
-        coreColor: opponent.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
-      });
+    // Detect slash activations for all players (same pattern as fire detection)
+    for (const p of players) {
+      const prevSlash = this._prevPlayerSlashCooldowns[p.id] || 0;
+      if (prevSlash <= 0 && p.slashCooldown > 0) {
+        const spawnDist = 0.3;
+        const px = p.x + Math.sin(p.angle) * spawnDist;
+        const pz = p.z + Math.cos(p.angle) * spawnDist;
+        const pos = new Vec3(px, 0.05, pz);
+        this.physics.spawnCrescentSlash({
+          position: pos,
+          facingAngle: p.angle,
+          coreColor: p.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
+        });
+      }
+      this._prevPlayerSlashCooldowns[p.id] = p.slashCooldown;
     }
 
     // Detect spell fire: cooldown jumps from 0 to >0
     if (myPlayer && this._prevMyCooldown <= 0 && myPlayer.cooldown > 0) {
       if (this.gameTitle) this.gameTitle.triggerJump();
     }
-  this._prevMyCooldown = this.myCooldown;
+    this._prevMyCooldown = this.myCooldown;
     this._prevMySlashCooldown = this.mySlashCooldown;
-    this._prevOpponentSlashCooldown = opponent ? opponent.slashCooldown : 0;
 
     // Detect hits: health drop on any player
     for (const p of players) {
