@@ -14,6 +14,7 @@ type Config struct {
 	Projectile    ProjectileConfig
 	Dash          DashConfig
 	Shield        ShieldConfig
+	Slash         SlashConfig
 }
 
 // DashConfig holds dash skill settings.
@@ -39,6 +40,14 @@ type ProjectileConfig struct {
 	MaxParticles  int
 	BurstSpeed    float32
 	BurstDuration float32
+}
+
+// SlashConfig holds the crescent slash skill settings.
+type SlashConfig struct {
+	Cooldown   float32
+	Damage     float32
+	HitRadius  float32
+	ConeAngle  float32 // degrees
 }
 
 // Default returns the default game configuration.
@@ -69,6 +78,12 @@ func Default() *Config {
 		Shield: ShieldConfig{
 			Cooldown:       7,
 			ActiveDuration: 1,
+		},
+		Slash: SlashConfig{
+			Cooldown:   0.5,
+			Damage:     2,
+			HitRadius:  2.5,
+			ConeAngle:  110,
 		},
 	}
 }

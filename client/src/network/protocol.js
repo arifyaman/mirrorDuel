@@ -34,19 +34,20 @@ export function decodeStateSnapshot(data) {
   const tick = dv.getUint16(off, true); off += 2;
   const playerCount = dv.getUint8(off); off += 1;
 
-  const players = [];
-  for (let i = 0; i < playerCount; i++) {
-    const id = dv.getUint8(off); off += 1;
-    const x = dv.getFloat32(off, true); off += 4;
-    const y = dv.getFloat32(off, true); off += 4;
-    const z = dv.getFloat32(off, true); off += 4;
-    const angle = dv.getFloat32(off, true); off += 4;
-    const cooldown = dv.getFloat32(off, true); off += 4;
-    const health = dv.getFloat32(off, true); off += 4;
-    const dashCooldown = dv.getFloat32(off, true); off += 4;
-    const shieldCooldown = dv.getFloat32(off, true); off += 4;
-    players.push({ id, x, y, z, angle, cooldown, health, dashCooldown, shieldCooldown });
-  }
+const players = [];
+    for (let i = 0; i < playerCount; i++) {
+      const id = dv.getUint8(off); off += 1;
+      const x = dv.getFloat32(off, true); off += 4;
+      const y = dv.getFloat32(off, true); off += 4;
+      const z = dv.getFloat32(off, true); off += 4;
+      const angle = dv.getFloat32(off, true); off += 4;
+      const cooldown = dv.getFloat32(off, true); off += 4;
+      const health = dv.getFloat32(off, true); off += 4;
+      const dashCooldown = dv.getFloat32(off, true); off += 4;
+      const shieldCooldown = dv.getFloat32(off, true); off += 4;
+      const slashCooldown = dv.getFloat32(off, true); off += 4;
+      players.push({ id, x, y, z, angle, cooldown, health, dashCooldown, shieldCooldown, slashCooldown });
+    }
 
   const projCount = dv.getUint8(off); off += 1;
   const projectiles = [];

@@ -9,6 +9,7 @@ export class Input {
     this.fire = false;
     this.dash = false;
     this.shield = false;
+    this.inputSlash = false;
     this._rayOrigin = new Vec3();
     this._rayDir = new Vec3();
     this._cam = null;
@@ -34,8 +35,18 @@ export class Input {
     });
 
     this._canvas.addEventListener('mousemove', e => this.onMouseMove(e));
-    this._canvas.addEventListener('mousedown', e => { if (e.button === 0) this.mouseDown = true; });
-    this._canvas.addEventListener('mouseup', e => { if (e.button === 0) this.mouseDown = false; });
+    this._canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) {
+        this.mouseDown = true;
+        this.inputSlash = true;
+      }
+    });
+    this._canvas.addEventListener('mouseup', e => {
+      if (e.button === 0) {
+        this.mouseDown = false;
+        this.inputSlash = false;
+      }
+    });
   }
 
   onMouseMove(e) {

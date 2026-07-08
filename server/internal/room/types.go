@@ -56,6 +56,11 @@ type Player struct {
 
 	ShieldCooldown float32
 	ShieldActive   bool
+
+	SlashCooldown    float32
+	SlashActive      bool
+	SlashActiveTime  float32
+	JustSlashed      bool
 }
 
 // NewPlayer creates a new Player.
@@ -117,6 +122,14 @@ func (p *Player) ProcessInputs(dt float32) {
 	}
 	p.processShield()
 
+	if p.SlashCooldown > 0 {
+		p.SlashCooldown -= dt
+		if p.SlashCooldown < 0 {
+			p.SlashCooldown = 0
+		}
+	}
+	p.processSlash()
+
 	// Check for projectile activation (flags & 0x01)
 	if last.Flags&0x01 != 0 && p.Cooldown <= 0 && !p.IsDashing {
 		p.JustFired = true
@@ -130,6 +143,12 @@ func (p *Player) ProcessInputs(dt float32) {
 	// Check for shield activation (flags & 0x04)
 	if last.Flags&0x04 != 0 && p.ShieldCooldown <= 0 && !p.IsDashing {
 		p.startShield()
+	}
+
+	// Check for slash activation (flags & 0x08)
+	if last.Flags&0x08 != 0 && p.SlashCooldown <= 0 && !p.IsDashing {
+		p.JustSlashed = true
+		p.SlashCooldown = p.Config.Slash.Cooldown
 	}
 
 	// Clear buffer
@@ -288,5 +307,21 @@ func (p *Player) processShield() {
 	elapsed := p.Config.Shield.Cooldown - p.ShieldCooldown
 	if elapsed >= p.Config.Shield.ActiveDuration {
 		p.ShieldActive = false
+	}
+}
+
+func (p *Player) startSlash() {
+	p.SlashActive = true
+	p.SlashActiveTime = 0
+	p.JustSlashed = true
+}
+
+func (p *Player) processSlash() {
+	if !p.SlashActive {
+		return
+	}
+	p.SlashActiveTime += 1.0 / 60.0 // ~16ms per tick
+	if p.SlashActiveTime >= 0.15 {
+		p.SlashActive = false
 	}
 }

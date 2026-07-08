@@ -44,26 +44,18 @@ export class Game {
     this.scene = new Scene(this.app);
     const serverUrl = import.meta.env.VITE_SERVER_URL || 'localhost:4433';
     this.networkClient = new NetworkClient(serverUrl);
-    this.network = new Network(this.networkClient, this);
+this.network = new Network(this.networkClient, this);
     this.physics = new Physics(this.app);
-    this.canvas.addEventListener('mousedown', () => {
-      const dist = 0.5;
-      const px = this._myPlayerPos.x + Math.sin(this._myPlayerAngle) * dist;
-      const pz = this._myPlayerPos.z + Math.cos(this._myPlayerAngle) * dist;
-      const pos = new Vec3(px, -.25, pz);
-      this.physics.spawnCrescentSlash({
-        position: pos,
-        facingAngle: this._myPlayerAngle,
-        coreColor: this.network.myPlayerId === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
-      });
-    });
     this.input = new Input(this.canvas, this.network);
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
     this.myCooldown = 0;
     this.myDashCooldown = 0;
     this.myShieldCooldown = 0;
+    this.mySlashCooldown = 0;
     this._prevMyCooldown = 0;
+    this._prevMySlashCooldown = 0;
+    this._prevOpponentSlashCooldown = 0;
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
     this._myPlayerAngle = 0;
@@ -106,16 +98,39 @@ export class Game {
       this.myCooldown = Math.max(0, myPlayer.cooldown);
       this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
       this.myShieldCooldown = Math.max(0, myPlayer.shieldCooldown);
+      this.mySlashCooldown = Math.max(0, myPlayer.slashCooldown);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
       this._myPlayerAngle = myPlayer.angle;
+    }
+
+    // Detect slash activation: cooldown jumps from 0 to >0
+    if (myPlayer && this._prevMySlashCooldown <= 0 && myPlayer.slashCooldown > 0) {
+      const pos = new Vec3(myPlayer.x, 0.05, myPlayer.z);
+      this.physics.spawnCrescentSlash({
+        position: pos,
+        facingAngle: myPlayer.angle,
+        coreColor: myPlayer.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
+      });
+    }
+    // Detect opponent slash activation
+    const opponent = players.find(p => p.id !== this.network.myPlayerId);
+    if (opponent && this._prevOpponentSlashCooldown <= 0 && opponent.slashCooldown > 0) {
+      const pos = new Vec3(opponent.x, 0.05, opponent.z);
+      this.physics.spawnCrescentSlash({
+        position: pos,
+        facingAngle: opponent.angle,
+        coreColor: opponent.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
+      });
     }
 
     // Detect spell fire: cooldown jumps from 0 to >0
     if (myPlayer && this._prevMyCooldown <= 0 && myPlayer.cooldown > 0) {
       if (this.gameTitle) this.gameTitle.triggerJump();
     }
-    this._prevMyCooldown = this.myCooldown;
+  this._prevMyCooldown = this.myCooldown;
+    this._prevMySlashCooldown = this.mySlashCooldown;
+    this._prevOpponentSlashCooldown = opponent ? opponent.slashCooldown : 0;
 
     // Detect hits: health drop on any player
     for (const p of players) {
@@ -185,6 +200,9 @@ export class Game {
     if (this.myShieldCooldown > 0) {
       this.myShieldCooldown = Math.max(0, this.myShieldCooldown - dt);
     }
+    if (this.mySlashCooldown > 0) {
+      this.mySlashCooldown = Math.max(0, this.mySlashCooldown - dt);
+    }
     const myId = this.network.myPlayerId;
     const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
     const moveX = dead ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
@@ -194,6 +212,7 @@ export class Game {
       if (this.input.fire) flags |= 0x01;
       if (this.input.dash) flags |= 0x02;
       if (this.input.shield) flags |= 0x04;
+      if (this.input.inputSlash) flags |= 0x08;
     }
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
   }

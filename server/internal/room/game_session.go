@@ -42,6 +42,7 @@ func (s *GameSession) TickStep() {
 		skillFire   skillType = 1
 		skillDash   skillType = 2
 		skillShield skillType = 3
+		skillSlash  skillType = 4
 	)
 	type activation struct {
 		skill skillType
@@ -63,6 +64,10 @@ func (s *GameSession) TickStep() {
 			activatedIDs[player.ID] = activation{skill: skillShield}
 			player.JustShielded = false
 		}
+		if player.JustSlashed {
+			activatedIDs[player.ID] = activation{skill: skillSlash}
+			player.JustSlashed = false
+		}
 	}
 
 	// Mirror cooldown reduction: when a skill activates, reduce the SAME skill's
@@ -79,13 +84,17 @@ func (s *GameSession) TickStep() {
 					if player.DashCooldown > 0 {
 						player.DashCooldown *= 0.5
 					}
-				case skillShield:
-					if player.ShieldCooldown > 0 {
-						player.ShieldCooldown *= 0.5
-					}
+		case skillShield:
+				if player.ShieldCooldown > 0 {
+					player.ShieldCooldown *= 0.5
+				}
+			case skillSlash:
+				if player.SlashCooldown > 0 {
+					player.SlashCooldown *= 0.5
 				}
 			}
 		}
+	}
 	}
 
 	// Fire projectiles for players that fired this tick (must be inside lock so projectiles
@@ -175,6 +184,77 @@ func (s *GameSession) TickStep() {
 	}
 	s.Projectiles = alive
 
+	// Process slash activations — instant hit detection
+	cfg := s.Config.Slash
+	slashActivated := make(map[int]*Player)
+	for id, act := range activatedIDs {
+		if act.skill == skillSlash {
+			if p, ok := s.Players[id]; ok {
+				slashActivated[id] = p
+			}
+		}
+	}
+
+	for attackerID, attacker := range slashActivated {
+		if attacker.Health <= 0 {
+			continue
+		}
+		for _, victim := range s.Players {
+			if victim.ID == attackerID {
+				continue
+			}
+			if victim.Health <= 0 {
+				continue
+			}
+
+			dx := victim.X - attacker.X
+			dz := victim.Z - attacker.Z
+			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
+			if dist > cfg.HitRadius {
+				continue
+			}
+
+			// Check if victim is in the attack cone
+			victimDirX := dx / dist
+			victimDirZ := dz / dist
+			attackerDirX := float32(math.Sin(float64(attacker.Angle)))
+			attackerDirZ := float32(math.Cos(float64(attacker.Angle)))
+			dot := victimDirX*attackerDirX + victimDirZ*attackerDirZ
+			maxCos := float32(math.Cos(float64(cfg.ConeAngle) * math.Pi / 180))
+
+			if dot < maxCos {
+				continue
+			}
+
+			// Check shield block
+			if victim.ShieldActive {
+				victimFacingX := float32(math.Sin(float64(victim.Angle)))
+				victimFacingZ := float32(math.Cos(float64(victim.Angle)))
+				blockDot := victimDirX*victimFacingX + victimDirZ*victimFacingZ
+				if blockDot >= float32(math.Cos(50*math.Pi/180)) {
+					// Blocked by shield
+					continue
+				}
+			}
+
+			// Check dodge
+			if victim.IsDashing {
+				continue
+			}
+
+			// Apply damage
+			victim.Health -= cfg.Damage
+			if victim.Health < 0 {
+				victim.Health = 0
+			}
+			log.Printf("[SLASH] attacker=%d hit victim=%d damage=%.0f | health=%.0f | dist=%.2f",
+				attackerID, victim.ID, cfg.Damage, victim.Health, dist)
+			break
+		}
+	}
+
+	s.Projectiles = alive
+
 	s.mu.Unlock()
 }
 
@@ -197,6 +277,7 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 			Health:         p.Health,
 			DashCooldown:   p.DashCooldown,
 			ShieldCooldown: p.ShieldCooldown,
+			SlashCooldown:  p.SlashCooldown,
 		})
 	}
 
