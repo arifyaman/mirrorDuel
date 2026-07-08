@@ -46,6 +46,17 @@ export class Game {
     this.networkClient = new NetworkClient(serverUrl);
     this.network = new Network(this.networkClient, this);
     this.physics = new Physics(this.app);
+    this.canvas.addEventListener('mousedown', () => {
+      const dist = 0.5;
+      const px = this._myPlayerPos.x + Math.sin(this._myPlayerAngle) * dist;
+      const pz = this._myPlayerPos.z + Math.cos(this._myPlayerAngle) * dist;
+      const pos = new Vec3(px, -.25, pz);
+      this.physics.spawnCrescentSlash({
+        position: pos,
+        facingAngle: this._myPlayerAngle,
+        coreColor: this.network.myPlayerId === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
+      });
+    });
     this.input = new Input(this.canvas, this.network);
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
@@ -156,6 +167,7 @@ export class Game {
     this.physics.updateProjectiles();
     this.physics.updateExplosions();
     this.physics.updateDashTrails();
+    this.physics.updateSlashes(dt);
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;

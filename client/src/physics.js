@@ -1,4 +1,4 @@
-import { Color, Entity, ShaderMaterial, StandardMaterial, Vec3, BLEND_NORMAL, CULLFACE_NONE, SEMANTIC_POSITION, SEMANTIC_NORMAL } from 'playcanvas';
+import { Color, Entity, Mesh, MeshInstance, ShaderMaterial, StandardMaterial, Vec3, BLEND_NORMAL, BLEND_ADDITIVE, CULLFACE_NONE, CULLFACE_BACK, SEMANTIC_POSITION, SEMANTIC_NORMAL, SEMANTIC_TEXCOORD0, createMesh } from 'playcanvas';
 
 const DT = 0.01667;
 
@@ -14,6 +14,7 @@ export class Physics {
     this._dashTrails = [];
     this._prevPlayerPos = new Map();
     this._playerShields = new Map();
+    this._slashes = [];
     this.app = app;
   }
 
@@ -613,6 +614,171 @@ export class Physics {
       t.entity.translate(t.driftX * alpha * 0.016, t.driftY * alpha * 0.016, t.driftZ * alpha * 0.016);
       const s = 0.5 * (0.3 + alpha * 0.7);
       t.entity.setLocalScale(s, s, s);
+    }
+  }
+
+  _createCrescentMesh(opts = {}) {
+    const arcAngle = opts.arcAngle !== undefined ? opts.arcAngle : 110 * (Math.PI / 180);
+    const outerRadius = opts.outerRadius !== undefined ? opts.outerRadius : 1.3;
+    const thickness = opts.thickness !== undefined ? opts.thickness : 0.55;
+    const segments = opts.segments !== undefined ? opts.segments : 40;
+    const taperPower = opts.taperPower !== undefined ? opts.taperPower : 1.3;
+
+    const positions = [];
+    const uvs = [];
+    const indices = [];
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const theta = -arcAngle / 2 + t * arcAngle;
+      const taper = Math.pow(Math.sin(t * Math.PI), taperPower);
+      const rOuter = outerRadius;
+      const rInner = outerRadius - thickness * taper;
+
+      const sinT = Math.sin(theta), cosT = Math.cos(theta);
+
+      positions.push(sinT * rOuter, 0, -cosT * rOuter);
+      uvs.push(t, 1);
+
+      positions.push(sinT * rInner, 0, -cosT * rInner);
+      uvs.push(t, 0);
+    }
+
+    for (let i = 0; i < segments; i++) {
+      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+      indices.push(a, b, c, b, d, c);
+    }
+
+    return createMesh(this.app.graphicsDevice, positions, { uvs, indices });
+  }
+
+  _createCrescentMaterial(coreColor, edgeColor) {
+    const vshader = `
+      attribute vec3 aPosition;
+      attribute vec2 aUv0;
+
+      uniform mat4 matrix_model;
+      uniform mat4 matrix_viewProjection;
+
+      varying vec2 vUv;
+
+      void main(void) {
+        vUv = aUv0;
+        gl_Position = matrix_viewProjection * matrix_model * vec4(aPosition, 1.0);
+      }
+    `;
+
+    const fshader = `
+      precision mediump float;
+
+      varying vec2 vUv;
+
+      uniform float uTime;
+      uniform float uAlpha;
+      uniform float uSweep;
+      uniform vec3 uColorCore;
+      uniform vec3 uColorEdge;
+
+      void main(void) {
+        float u = vUv.x;
+        float v = vUv.y;
+
+        float sweepEdge = 0.021;
+        float reveal = smoothstep(u + sweepEdge, u - sweepEdge, uSweep);
+        float endFade = smoothstep(0.0, 0.05, u) * smoothstep(1.0, 0.95, u);
+
+        vec3 col = mix(uColorEdge, uColorCore, pow(v, 1.6));
+
+        float rim = pow(v, 4.0) * 1.4;
+        col += rim * uColorCore;
+
+        float streak = sin(u * 40.0 - uTime * 9.0) * 0.5 + 0.5;
+        streak = pow(streak, 6.0);
+        col += streak * 0.35 * uColorCore;
+
+        float alpha = reveal * endFade * uAlpha;
+        alpha *= smoothstep(0.0, 0.25, v);
+
+        gl_FragColor = vec4(col, alpha);
+      }
+    `;
+
+    const mat = new ShaderMaterial({
+      uniqueName: 'crescentSlash',
+      attributes: { aPosition: SEMANTIC_POSITION, aUv0: SEMANTIC_TEXCOORD0 },
+      vertexGLSL: vshader,
+      fragmentGLSL: fshader,
+    });
+    mat.blendType = BLEND_NORMAL;
+    mat.depthWrite = false;
+    mat.cull = CULLFACE_BACK;
+    mat.update();
+
+    mat.setParameter('uTime', 0);
+    mat.setParameter('uAlpha', 1);
+    mat.setParameter('uSweep', 0);
+    mat.setParameter('uColorCore', coreColor);
+    mat.setParameter('uColorEdge', edgeColor);
+
+    return mat;
+  }
+
+  spawnCrescentSlash(options = {}) {
+    const {
+      position = new Vec3(0, 0.05, 0),
+      facingAngle = 0,
+      coreColor = [0.45, 0.9, 1.0],
+      edgeColor = [0.05, 0.2, 0.47],
+      radius = 1,
+      arcAngle = 220,
+      duration = 0.60
+    } = options;
+
+    const mat = this._createCrescentMaterial(coreColor, edgeColor);
+
+    const crescentMesh = this._createCrescentMesh({ outerRadius: radius, arcAngle: arcAngle * (Math.PI / 180) });
+
+    const entity = new Entity('slash');
+    entity.addComponent('render', { type: 'box' });
+    entity.render.meshInstances[0].mesh = crescentMesh;
+    entity.render.meshInstances[0].material = mat;
+    entity.setPosition(position);
+    entity.setEulerAngles(0, (facingAngle + Math.PI) * 180 / Math.PI, 0);
+    entity.setLocalScale(0.45, 1, 0.35);
+    this.app.root.addChild(entity);
+
+    this._slashes.push({
+      entity, mat, mesh: crescentMesh,
+      elapsed: 0,
+      duration,
+      sweepDuration: duration * 0.30,
+      holdDuration: 0.1,
+      fadeDuration: duration * 0.6
+    });
+  }
+
+  updateSlashes(dt) {
+    for (let i = this._slashes.length - 1; i >= 0; i--) {
+      const s = this._slashes[i];
+      s.elapsed += dt;
+      s.mat.setParameter('uTime', s.elapsed);
+
+      let sweep = s.elapsed < s.sweepDuration ? s.elapsed / s.sweepDuration : 1;
+      let alpha = 1;
+      if (s.elapsed > s.sweepDuration + s.holdDuration) {
+        const fadeT = (s.elapsed - s.sweepDuration - s.holdDuration) / s.fadeDuration;
+        alpha = 1 - Math.min(fadeT, 1);
+      }
+      s.mat.setParameter('uSweep', sweep);
+      s.mat.setParameter('uAlpha', alpha);
+
+      if (s.elapsed >= s.duration) {
+        if (s.entity.parent) s.entity.parent.removeChild(s.entity);
+        s.entity.destroy();
+        s.mat.destroy();
+        if (s.mesh) s.mesh.destroy();
+        this._slashes.splice(i, 1);
+      }
     }
   }
 
