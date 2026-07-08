@@ -47,11 +47,12 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 ### Slash Skill
 - **Activation**: Mousedown (flag 0x08)
 - **Cooldown**: 0.5 seconds
-- **Damage**: 2 (instant)
-- **Hit Range**: 2.5 units radius
-- **Cone Angle**: 110° front-facing
+- **Damage**: 4.2 (instant)
+- **Hit Range**: 0.95 units radius
+- **Cone Angle**: 85° front-facing
 - **VFX**: Crescent arc mesh with additive shader (glow, streaks, sweep reveal, fade), spawns 0.3 units forward of player
 - **Server-authoritative**: Hit detection, cooldown, dash dodge, shield block all on server
+- **VFX notification**: Server sends `MSG_SLASH_EVENT` (type 18) packet with attacker ID, position, and angle — client spawns VFX directly from this event, never misses an animation
 - **Mirror mechanic**: Slash activation reduces opponent's slash cooldown by 50%
 
 ### Mirror Cooldown Mechanic
@@ -135,21 +136,21 @@ mirrorDuel/
 - **Slash Input**: mousedown/mouseup sets `inputSlash` flag (0x08) for slash skill activation
 
 ### `src/game.js`
-- **Slash VFX**: Detects slash cooldown > 0 with persistent `_slashShown` flag per player to ensure VFX always displays even on late-arriving snapshots. Resets flag when cooldown drops to 0.
+- **Slash VFX**: `onSlashEvent()` handler receives `MSG_SLASH_EVENT` from server and spawns crescent VFX at the reported position/angle — no cooldown state interpretation needed
 
 ### `src/network/protocol.js`
 - **Binary Encoding**: `encodePlayerInput()` - 13 bytes (tick:2, moveX:1, moveZ:1, mouseX:4, mouseY:4, flags:1)
   - flags: `0x01` = fire, `0x02` = dash, `0x04` = shield, `0x08` = slash
 - **Binary Decoding**: `decodeStateSnapshot()` - variable length, players + projectiles
   - Player: 37 bytes (1 u8 + 9 f32) — includes shieldCooldown, slashCooldown
-- **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), DISCONNECT(255)
+- **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), SLASH_EVENT(18), DISCONNECT(255)
 
 ### Entity System
 - **Player Entities**: Created dynamically from server state
 - **Red/Blue**: Player 1 = red, Player 2 = blue
 - **Indicator**: Green strip showing forward direction (opponent only)
 - **Projectile Entities**: Spawn at start position, compute position from tick delta
-- **Slash VFX**: Crescent mesh with additive shader, sweep reveal animation, fade out — spawned on cooldown transition, persists until cooldown resets
+- **Slash VFX**: Crescent mesh with additive shader, sweep reveal animation, fade out — triggered by server `MSG_SLASH_EVENT` packet, never misses an animation
 - **Entity Cleanup**: `applyPlayers()` destroys entities for player IDs absent from snapshot (mirrors `applyProjectiles()` pattern); disconnecting opponents disappear naturally
 
 ## Server Architecture
@@ -166,7 +167,7 @@ mirrorDuel/
 - **Movement**: `targetX/Z` with smooth lerp: `alpha = 1 - exp(-8 * dt)`
 - **Speed Modulation**: `speedMult = 0.75 + 0.25 * alignment` (dot product of moveDir and playerForward)
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
-- **Slash**: Instant hit detection (110° cone, 2.5 radius), mirror cooldown reduction
+- **Slash**: Instant hit detection (85° cone, 0.95 radius), mirror cooldown reduction
 - **Mirror Cooldowns**: Each skill activation reduces only the same skill on opponent by 50% (fire→fire, dash→dash, shield→shield, slash→slash)
 - **Room Reset**: When 2nd player joins, `Reset()` places both players at spawn positions (P1: -2/-0.2, P2: 2/-0.2) with full health, zero cooldowns, cleared projectiles; P1 faces +X (π/2), P2 faces -X (-π/2)
 
@@ -174,12 +175,12 @@ mirrorDuel/
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
 - **Player ID**: Picks first free slot from {1, 2} (not `len+1`), so either player leaving and rejoining works correctly
 - **Input Processing**: Queues inputs, triggers skill activation
-- **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room
+- **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room; also broadcasts SLASH_EVENT packets when slash attacks occur
 - **Disconnect**: Removes player from room, keeps room open for replacement (only deletes empty rooms)
 
 ### `internal/network/protocol.go`
 - **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
-- **Encoding**: `encodeStateSnapshot()` - 37 bytes per player, 31 bytes per projectile
+- **Encoding**: `encodeStateSnapshot()` - 37 bytes per player, 31 bytes per projectile; `encodeSlashEvent()` - 13 bytes (playerId + x + z + angle)
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
 - **Read Loop**: Handles multiple coalesced messages per read
 
@@ -192,7 +193,7 @@ mirrorDuel/
 - **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 - **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
-- **Slash**: Cooldown(0.5), Damage(2), HitRadius(2.5), ConeAngle(110)
+- **Slash**: Cooldown(0.5), Damage(4.2), HitRadius(0.95), ConeAngle(85)
 - **All durations in seconds** (no tick-based values)
 
 ## Network Protocol
@@ -217,6 +218,7 @@ mirrorDuel/
 |------|------|------|--------|
 | 16 | STATE_SNAPSHOT | variable | `[tick: u16][playerCount: u8][players...][projCount: u8][projectiles...]` |
 | 17 | ROOM_CREATED | variable | `[roomId: u16][myPlayerId: u8][opponentNameLen: u8][name: bytes]` |
+| 18 | SLASH_EVENT | 13 | `[playerId: u8][x: f32][z: f32][angle: f32]` |
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
