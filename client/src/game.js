@@ -146,7 +146,7 @@ this.network = new Network(this.networkClient, this);
     this.scene.setPlayerPositions(players.map(p => ({ x: p.x, z: p.z })));
 
     this.physics.applySnapshot(players, projectiles);
-    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7]);
+    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7], this.network.myPlayerId);
   }
 
   recreateHUD() {

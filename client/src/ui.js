@@ -7,6 +7,7 @@ export class UI {
     this.max = max;
     this.maxPerSkill = [3, 7, 7];
     this.healthBarEntities = new Map();
+    this.slashBarEntities = new Map();
     this.rings = [];
     this.texts = [];
     this.container = null;
@@ -14,8 +15,9 @@ export class UI {
     this._createFlashOverlay();
   }
 
-  update(players, cooldowns, maxPerSkill) {
+  update(players, cooldowns, maxPerSkill, myPlayerId) {
     this._updateHealthBars(players);
+    this._updateSlashCooldownBars(players, myPlayerId);
     this._updateCooldowns(cooldowns, maxPerSkill);
   }
 
@@ -87,6 +89,54 @@ export class UI {
     this.app.root.addChild(fill);
 
     return { bg, fill };
+  }
+
+  _createSlashCooldownBar(id) {
+    const bar = new Entity('slashCd' + id);
+    bar.addComponent('render', { type: 'box' });
+    const mat = new StandardMaterial();
+    mat.diffuse = new Color(0.6, 0.6, 0.6);
+    mat.emissive = new Color(0.3, 0.3, 0.3);
+    mat.opacity = 0.8;
+    mat.blendType = 2;
+    mat.alphaWrite = false;
+    mat.update();
+    bar.render.material = mat;
+    bar.setLocalScale(1.6, 0.04, 0.04);
+    bar.enabled = false;
+    this.app.root.addChild(bar);
+    return bar;
+  }
+
+  _updateSlashCooldownBars(players, myPlayerId) {
+    for (const p of players) {
+      if (p.id !== myPlayerId) continue;
+      let bar = this.slashBarEntities.get(p.id);
+      if (!bar) {
+        bar = this._createSlashCooldownBar(p.id);
+        this.slashBarEntities.set(p.id, bar);
+      }
+      const dead = p.health <= 0;
+      const ready = p.slashCooldown <= 0;
+      if (dead || ready) {
+        bar.enabled = false;
+        continue;
+      }
+      const maxCd = 0.5;
+      const ratio = Math.max(0, Math.min(1, 1 - p.slashCooldown / maxCd));
+      const fullWidth = 1.6;
+      bar.enabled = true;
+      bar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
+      bar.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.3, p.z);
+    }
+    for (const [id, bar] of this.slashBarEntities) {
+      const found = players.some(p => p.id === id && p.id === myPlayerId);
+      if (!found) {
+        if (bar.parent) bar.parent.removeChild(bar);
+        bar.destroy();
+        this.slashBarEntities.delete(id);
+      }
+    }
   }
 
   _createCooldownElements() {
@@ -280,6 +330,11 @@ export class UI {
       bar.fill.destroy();
     }
     this.healthBarEntities.clear();
+    for (const [, bar] of this.slashBarEntities) {
+      if (bar.parent) bar.parent.removeChild(bar);
+      bar.destroy();
+    }
+    this.slashBarEntities.clear();
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
