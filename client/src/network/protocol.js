@@ -3,6 +3,7 @@ export const MSG_JOIN_ROOM = 1;
 export const MSG_PLAYER_INPUT = 2;
 export const MSG_STATE_SNAPSHOT = 16;
 export const MSG_ROOM_CREATED = 17;
+export const MSG_SLASH_EVENT = 18;
 export const MSG_DISCONNECT = 255;
 
 export const INPUT_SIZE = 13;
@@ -75,4 +76,14 @@ export function decodeRoomCreated(data) {
   const nameLen = dv.getUint8(3);
   const opponentName = new TextDecoder().decode(data.slice(4, 4 + nameLen));
   return { roomId, myPlayerId, opponentName };
+}
+
+export function decodeSlashEvent(data) {
+  if (data.length < 13) return null;
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const playerId = dv.getUint8(0);
+  const x = dv.getFloat32(1, true);
+  const z = dv.getFloat32(5, true);
+  const angle = dv.getFloat32(9, true);
+  return { playerId, x, z, angle };
 }

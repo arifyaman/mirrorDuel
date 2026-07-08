@@ -10,14 +10,23 @@ import (
 	"mirror-duel-server-go/internal/network"
 )
 
+// SlashEvent records a slash attack for broadcast to clients.
+type SlashEvent struct {
+	PlayerID uint8
+	X        float32
+	Z        float32
+	Angle    float32
+}
+
 // GameSession mirrors the TypeScript GameSession (a 1v1 room).
 type GameSession struct {
-	RoomID      int
-	tick        int
-	Config      *config.Config
-	mu          sync.Mutex
-	Players     map[int]*Player
-	Projectiles []Projectile
+	RoomID            int
+	tick              int
+	Config            *config.Config
+	mu                sync.Mutex
+	Players           map[int]*Player
+	Projectiles       []Projectile
+	pendingSlashEvents []SlashEvent
 }
 
 var projectileIDCounter int32
@@ -253,6 +262,16 @@ func (s *GameSession) TickStep() {
 		}
 	}
 
+	// Collect slash events for client VFX (all slashes, not just hits)
+	for _, attacker := range slashActivated {
+		s.pendingSlashEvents = append(s.pendingSlashEvents, SlashEvent{
+			PlayerID: uint8(attacker.ID),
+			X:        attacker.X,
+			Z:        attacker.Z,
+			Angle:    attacker.Angle,
+		})
+	}
+
 	s.Projectiles = alive
 
 	s.mu.Unlock()
@@ -297,6 +316,13 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 	}
 
 	return
+}
+
+// GetSlashEvents returns and clears pending slash events for this tick.
+func (s *GameSession) GetSlashEvents() []SlashEvent {
+	events := s.pendingSlashEvents
+	s.pendingSlashEvents = nil
+	return events
 }
 
 // AddPlayer creates and returns a new Player for this session.
@@ -345,6 +371,7 @@ func (s *GameSession) Reset() {
 		p.Cooldown = 0
 		p.DashCooldown = 0
 		p.ShieldCooldown = 0
+		p.SlashCooldown = 0
 		p.IsDashing = false
 		p.ShieldActive = false
 	}

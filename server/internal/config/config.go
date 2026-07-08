@@ -81,9 +81,9 @@ func Default() *Config {
 		},
 		Slash: SlashConfig{
 			Cooldown:   0.5,
-			Damage:     2,
-			HitRadius:  2.5,
-			ConeAngle:  110,
+			Damage:     4.2,
+			HitRadius:  0.95,
+			ConeAngle:  85,
 		},
 	}
 }

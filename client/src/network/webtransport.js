@@ -1,4 +1,4 @@
-import { encodeJoinRoom, encodePlayerInput, MSG_JOIN_ROOM, MSG_PLAYER_INPUT, MSG_STATE_SNAPSHOT, MSG_ROOM_CREATED, MSG_DISCONNECT, decodeStateSnapshot, decodeRoomCreated } from './protocol.js';
+import { encodeJoinRoom, encodePlayerInput, MSG_JOIN_ROOM, MSG_PLAYER_INPUT, MSG_STATE_SNAPSHOT, MSG_ROOM_CREATED, MSG_SLASH_EVENT, MSG_DISCONNECT, decodeStateSnapshot, decodeRoomCreated, decodeSlashEvent } from './protocol.js';
 
 export class NetworkClient {
   constructor(serverUrl = 'localhost:4433') {
@@ -11,6 +11,7 @@ export class NetworkClient {
     this.tick = 0;
     this.snapHandler = null;
     this.joinHandler = null;
+    this.slashHandler = null;
     this.disconnectHandler = null;
     this.statusHandler = null;
     this.reconnectTimer = null;
@@ -27,6 +28,7 @@ export class NetworkClient {
 
   onSnap(cb) { this.snapHandler = cb; }
   onJoin(cb) { this.joinHandler = cb; }
+  onSlashEvent(cb) { this.slashHandler = cb; }
   onDisconnect(cb) { this.disconnectHandler = cb; }
   onStatus(cb) { this.statusHandler = cb; }
 
@@ -92,6 +94,9 @@ export class NetworkClient {
             case MSG_ROOM_CREATED:
               this.handleRoomCreated(payload);
               break;
+            case MSG_SLASH_EVENT:
+              this.handleSlashEvent(payload);
+              break;
             case MSG_DISCONNECT:
               this.setStatus('disconnected');
               if (this.disconnectHandler) this.disconnectHandler('Server disconnected');
@@ -148,6 +153,13 @@ export class NetworkClient {
     const result = decodeRoomCreated(payload);
     if (result && this.joinHandler) {
       this.joinHandler(result.roomId, result.myPlayerId, result.opponentName);
+    }
+  }
+
+  handleSlashEvent(payload) {
+    const event = decodeSlashEvent(payload);
+    if (event && this.slashHandler) {
+      this.slashHandler(event.playerId, event.x, event.z, event.angle);
     }
   }
 

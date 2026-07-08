@@ -12,6 +12,7 @@ const (
 	MSGStateSnapshot  = 16
 	MSGRoomCreated    = 17
 	MSGDisconnect     = 255
+	MSGSlashEvent     = 18
 
 	InputSize = 13
 )
@@ -160,6 +161,16 @@ func EncodeRoomCreated(roomID uint16, myPlayerID uint8, opponentName string) []b
 	buf[2] = myPlayerID
 	buf[3] = uint8(len(opponentName))
 	copy(buf[4:], opponentName)
+	return buf
+}
+
+// EncodeSlashEvent produces: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
+func EncodeSlashEvent(playerId uint8, x, z, angle float32) []byte {
+	buf := make([]byte, 13)
+	buf[0] = playerId
+	binary.LittleEndian.PutUint32(buf[1:5], math.Float32bits(x))
+	binary.LittleEndian.PutUint32(buf[5:9], math.Float32bits(z))
+	binary.LittleEndian.PutUint32(buf[9:13], math.Float32bits(angle))
 	return buf
 }
 

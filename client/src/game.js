@@ -54,9 +54,6 @@ this.network = new Network(this.networkClient, this);
     this.myShieldCooldown = 0;
     this.mySlashCooldown = 0;
     this._prevMyCooldown = 0;
-    this._prevMySlashCooldown = 0;
-    this._prevPlayerSlashCooldowns = {};
-    this._slashShown = {};
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
     this._myPlayerAngle = 0;
@@ -74,6 +71,7 @@ this.network = new Network(this.networkClient, this);
       this.network.onJoin(myPlayerId);
     });
     this.networkClient.onSnap((tick, players, projectiles) => this.onSnap(tick, players, projectiles));
+    this.networkClient.onSlashEvent((playerId, x, z, angle) => this.onSlashEvent(playerId, x, z, angle));
 
     this.app.on('update', (dt) => this.update(dt));
     this.app.start();
@@ -105,33 +103,11 @@ this.network = new Network(this.networkClient, this);
       this._myPlayerAngle = myPlayer.angle;
     }
 
-    // Detect slash activations for all players — persistent flag until cooldown resets
-    for (const p of players) {
-      const prevSlash = this._prevPlayerSlashCooldowns[p.id] || 0;
-      if (p.slashCooldown > 0 && !this._slashShown[p.id]) {
-        const spawnDist = 0.3;
-        const px = p.x + Math.sin(p.angle) * spawnDist;
-        const pz = p.z + Math.cos(p.angle) * spawnDist;
-        const pos = new Vec3(px, -0.25, pz);
-        this.physics.spawnCrescentSlash({
-          position: pos,
-          facingAngle: p.angle,
-          coreColor: p.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
-        });
-        this._slashShown[p.id] = true;
-      }
-      if (prevSlash > 0 && p.slashCooldown <= 0) {
-        this._slashShown[p.id] = false;
-      }
-      this._prevPlayerSlashCooldowns[p.id] = p.slashCooldown;
-    }
-
     // Detect spell fire: cooldown jumps from 0 to >0
     if (myPlayer && this._prevMyCooldown <= 0 && myPlayer.cooldown > 0) {
       if (this.gameTitle) this.gameTitle.triggerJump();
     }
     this._prevMyCooldown = this.myCooldown;
-    this._prevMySlashCooldown = this.mySlashCooldown;
 
     // Detect hits: health drop on any player
     for (const p of players) {
@@ -176,6 +152,18 @@ this.network = new Network(this.networkClient, this);
   recreateHUD() {
     this.ui.destroy();
     this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+  }
+
+  onSlashEvent(playerId, x, z, angle) {
+    const spawnDist = 0.3;
+    const px = x + Math.sin(angle) * spawnDist;
+    const pz = z + Math.cos(angle) * spawnDist;
+    const pos = new Vec3(px, -0.25, pz);
+    this.physics.spawnCrescentSlash({
+      position: pos,
+      facingAngle: angle,
+      coreColor: playerId === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
+    });
   }
 
   update(dt) {

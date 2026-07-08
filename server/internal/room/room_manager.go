@@ -13,6 +13,7 @@ type SessionIface interface {
 	PlayerID() int
 	SendSnapshot(data []byte)
 	SendRoomCreated(data []byte)
+	SendSlashEvent(data []byte)
 	SendDisconnect()
 }
 
@@ -201,9 +202,14 @@ func (m *RoomManager) broadcast() {
 		}
 		tick, players, projectiles := room.GetSnapshot()
 		data := network.EncodeStateSnapshot(tick, players, projectiles)
+		slashEvents := room.GetSlashEvents()
 		for _, player := range room.Players {
 			if player.Session != nil {
 				player.Session.SendSnapshot(data)
+				for _, evt := range slashEvents {
+					evtData := network.EncodeSlashEvent(evt.PlayerID, evt.X, evt.Z, evt.Angle)
+					player.Session.SendSlashEvent(evtData)
+				}
 			}
 		}
 	}

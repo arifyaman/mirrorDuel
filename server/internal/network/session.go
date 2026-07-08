@@ -91,6 +91,11 @@ func (s *Session) SendRoomCreated(data []byte) {
 	s.SendMsg(MSGRoomCreated, data)
 }
 
+// SendSlashEvent sends a SLASH_EVENT message with pre-encoded binary data.
+func (s *Session) SendSlashEvent(data []byte) {
+	s.SendMsg(MSGSlashEvent, data)
+}
+
 // SendDisconnect sends a DISCONNECT message.
 func (s *Session) SendDisconnect() {
 	s.SendMsg(MSGDisconnect, nil)
