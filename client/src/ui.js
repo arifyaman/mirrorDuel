@@ -8,6 +8,9 @@ export class UI {
     this.maxPerSkill = [3, 7, 7];
     this.healthBarEntities = new Map();
     this.slashBarEntities = new Map();
+    this.fireBar = null;
+    this.shieldBar = null;
+    this.dashBar = null;
     this.rings = [];
     this.texts = [];
     this.container = null;
@@ -17,6 +20,7 @@ export class UI {
 
   update(players, cooldowns, maxPerSkill, myPlayerId) {
     this._updateHealthBars(players);
+    this._updateSkillCooldownBars(players, myPlayerId);
     this._updateSlashCooldownBars(players, myPlayerId);
     this._updateCooldowns(cooldowns, maxPerSkill);
   }
@@ -95,8 +99,8 @@ export class UI {
     const bar = new Entity('slashCd' + id);
     bar.addComponent('render', { type: 'box' });
     const mat = new StandardMaterial();
-    mat.diffuse = new Color(0.6, 0.6, 0.6);
-    mat.emissive = new Color(0.3, 0.3, 0.3);
+    mat.diffuse = new Color(0, 0, 0);
+    mat.emissive = new Color(0.6, 0.6, 0.6);
     mat.opacity = 0.8;
     mat.blendType = 2;
     mat.alphaWrite = false;
@@ -127,7 +131,7 @@ export class UI {
       const fullWidth = 1.6;
       bar.enabled = true;
       bar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
-      bar.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.3, p.z);
+      bar.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.15, p.z);
     }
     for (const [id, bar] of this.slashBarEntities) {
       const found = players.some(p => p.id === id && p.id === myPlayerId);
@@ -136,6 +140,71 @@ export class UI {
         bar.destroy();
         this.slashBarEntities.delete(id);
       }
+    }
+  }
+
+  _createSkillCooldownBar(name, color) {
+    const bar = new Entity(name);
+    bar.addComponent('render', { type: 'box' });
+    const mat = new StandardMaterial();
+    mat.diffuse = new Color(0, 0, 0);
+    mat.emissive = new Color(color[0], color[1], color[2]);
+    mat.opacity = 0.8;
+    mat.blendType = 2;
+    mat.alphaWrite = false;
+    mat.update();
+    bar.render.material = mat;
+    bar.setLocalScale(1.6, 0.04, 0.04);
+    bar.enabled = false;
+    this.app.root.addChild(bar);
+    return bar;
+  }
+
+  _updateSkillCooldownBars(players, myPlayerId) {
+    const myPlayer = players.find(p => p.id === myPlayerId);
+    if (!myPlayer || myPlayer.health <= 0) {
+      if (this.fireBar) this.fireBar.enabled = false;
+      if (this.shieldBar) this.shieldBar.enabled = false;
+      if (this.dashBar) this.dashBar.enabled = false;
+      return;
+    }
+
+    const fullWidth = 1.6;
+
+    // Fire bar (red) — y+1.3
+    const fireCd = myPlayer.cooldown || 0;
+    if (fireCd > 0) {
+      if (!this.fireBar) this.fireBar = this._createSkillCooldownBar('fireCd', [1.0, 0.27, 0.27]);
+      const ratio = Math.max(0, Math.min(1, 1 - fireCd / 3));
+      this.fireBar.enabled = true;
+      this.fireBar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
+      this.fireBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.3, myPlayer.z);
+    } else if (this.fireBar) {
+      this.fireBar.enabled = false;
+    }
+
+    // Shield bar (blue) — y+1.25
+    const shieldCd = myPlayer.shieldCooldown || 0;
+    if (shieldCd > 0) {
+      if (!this.shieldBar) this.shieldBar = this._createSkillCooldownBar('shieldCd', [0.27, 0.53, 1.0]);
+      const ratio = Math.max(0, Math.min(1, 1 - shieldCd / 7));
+      this.shieldBar.enabled = true;
+      this.shieldBar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
+      this.shieldBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.25, myPlayer.z);
+    } else if (this.shieldBar) {
+      this.shieldBar.enabled = false;
+    }
+
+    // Dash bar (yellow) — y+1.2
+    const dashCd = myPlayer.dashCooldown || 0;
+    if (dashCd > 0) {
+      if (!this.dashBar) this.dashBar = this._createSkillCooldownBar('dashCd', [1.0, 0.67, 0.0]);
+      const ratio = Math.max(0, Math.min(1, 1 - dashCd / 7));
+      this.dashBar.enabled = true;
+      this.dashBar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
+      this.dashBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.2, myPlayer.z);
+    } else if (this.dashBar) {
+      this.dashBar.enabled = false;
     }
   }
 
@@ -355,6 +424,15 @@ export class UI {
       bar.destroy();
     }
     this.slashBarEntities.clear();
+    for (const bar of [this.fireBar, this.shieldBar, this.dashBar]) {
+      if (bar) {
+        if (bar.parent) bar.parent.removeChild(bar);
+        bar.destroy();
+      }
+    }
+    this.fireBar = null;
+    this.shieldBar = null;
+    this.dashBar = null;
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
