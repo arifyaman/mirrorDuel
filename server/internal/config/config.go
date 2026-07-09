@@ -28,8 +28,9 @@ type DashConfig struct {
 
 // ShieldConfig holds shield skill settings.
 type ShieldConfig struct {
-	Cooldown       float32 // 7 seconds
-	ActiveDuration float32 // 1 second
+	Cooldown           float32
+	ActiveDuration     float32 // 1 second
+	PerfectBlockWindow float32 // seconds after shield opens to allow perfect block
 }
 
 // ProjectileConfig mirrors the skills.projectile config.
@@ -78,8 +79,9 @@ func Default() *Config {
 			EaseOutStart: 0.2,
 		},
 		Shield: ShieldConfig{
-			Cooldown:       7,
-			ActiveDuration: 1,
+			Cooldown:           7,
+			ActiveDuration:     1,
+			PerfectBlockWindow: 0.3,
 		},
 		Slash: SlashConfig{
 			Cooldown:   0.5,

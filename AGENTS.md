@@ -43,6 +43,7 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Effect**: Blocks incoming projectiles within 100° front-facing cone while active (server-authoritative, projectile destroyed on contact)
 - **Visual**: Voronoi crack-pattern sphere with 100° front-facing cone, opening animation (0.3s ease-out), fully open, then closing animation (0.3s ease-in)
 - **Shield blocks projectiles**: Server checks `ShieldActive` and dot product (facing vs direction to projectile) ≥ cos(50°) before dealing damage; blocked projectiles are destroyed with no damage dealt
+- **Perfect Block**: When a projectile is blocked within `PerfectBlockWindow` seconds (config, default 0.3s) after shield activation, fires a free projectile in the player's facing direction (no cooldown consumed). Triggers once per shield activation. Server sends `EventPerfectBlock` (type 2) to client for visual feedback (bright gold/cyan flash)
 
 ### Slash Skill
 - **Activation**: Mousedown (flag 0x08)
@@ -206,6 +207,7 @@ mirrorDuel/
 - **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5), KnockbackScale(0.08)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 - **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
+- **Shield**: Cooldown(7), ActiveDuration(1), PerfectBlockWindow(0.3)
 - **Slash**: Cooldown(0.5), Damage(4.2), HitRadius(0.95), ConeAngle(85)
 - **All durations in seconds** (no tick-based values)
 
@@ -236,7 +238,7 @@ mirrorDuel/
 ### StateSnapshot Details
 - **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32][shieldCooldown: f32][slashCooldown: f32]` (37 bytes, 9 floats)
 - **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
-- **Event**: `[eventType: u8][payload: varies]` — event sub-types: EVENT_SLASH(1) = `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes)
+- **Event**: `[eventType: u8][payload: varies]` — event sub-types: EVENT_SLASH(1) = `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes), EVENT_PERFECT_BLOCK(2) = `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes)
 
 ## Git & Deployment
 

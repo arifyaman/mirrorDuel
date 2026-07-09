@@ -16,7 +16,8 @@ const (
 	InputSize = 13
 
 	// Game event sub-types embedded in STATE_SNAPSHOT.
-	EventSlash = 1
+	EventSlash        = 1
+	EventPerfectBlock = 2
 )
 
 // PlayerInput matches the binary layout from client protocol.
@@ -187,6 +188,16 @@ func EncodeRoomCreated(roomID uint16, myPlayerID uint8, opponentName string) []b
 
 // EncodeSlashPayload produces the payload for a slash event: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
 func EncodeSlashPayload(playerId uint8, x, z, angle float32) []byte {
+	buf := make([]byte, 13)
+	buf[0] = playerId
+	binary.LittleEndian.PutUint32(buf[1:5], math.Float32bits(x))
+	binary.LittleEndian.PutUint32(buf[5:9], math.Float32bits(z))
+	binary.LittleEndian.PutUint32(buf[9:13], math.Float32bits(angle))
+	return buf
+}
+
+// EncodePerfectBlockPayload produces the payload for a perfect block event: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
+func EncodePerfectBlockPayload(playerId uint8, x, z, angle float32) []byte {
 	buf := make([]byte, 13)
 	buf[0] = playerId
 	binary.LittleEndian.PutUint32(buf[1:5], math.Float32bits(x))

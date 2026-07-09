@@ -54,8 +54,10 @@ type Player struct {
 	DashTargetX  float32
 	DashTargetZ  float32
 
-	ShieldCooldown float32
-	ShieldActive   bool
+	ShieldCooldown     float32
+	ShieldActive       bool
+	ShieldActivatedTick int
+	PerfectBlockUsed   bool
 
 	SlashCooldown    float32
 	SlashActive      bool

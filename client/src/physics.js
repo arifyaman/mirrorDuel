@@ -11,6 +11,7 @@ export class Physics {
     this.projectileEntities = new Map();
     this._explosions = [];
     this._playerFlash = new Map();
+    this._playerPerfectFlash = new Map();
     this._dashTrails = [];
     this._prevPlayerPos = new Map();
     this._playerShields = new Map();
@@ -41,11 +42,18 @@ export class Physics {
       // Player hit flash
       const mat = entity.render.material;
       const flashStart = this._playerFlash.get(p.id);
-      if (flashStart && (performance.now() - flashStart) < 250) {
+      const perfectFlashStart = this._playerPerfectFlash.get(p.id);
+      if (perfectFlashStart && (performance.now() - perfectFlashStart) < 400) {
+        mat.emissive.set(0.2, 1.0, 0.8);
+        mat.emissiveIntensity = 8.0;
+      } else if (flashStart && (performance.now() - flashStart) < 250) {
         mat.emissiveIntensity = 5.0;
       } else {
         mat.emissiveIntensity = 1.5;
+        const col = p.id === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1];
+        mat.emissive.set(col[0], col[1], col[2]);
         this._playerFlash.delete(p.id);
+        this._playerPerfectFlash.delete(p.id);
       }
       mat.update();
 
@@ -96,7 +104,7 @@ export class Physics {
       // Shield visual per player
       const shieldColor = p.id === 1 ? [1.0, 0.3, 0.3] : [0.1, 0.5, 1.0];
       const activeWin = 7 - (p.shieldCooldown || 0);
-      const shieldActive = p.shieldCooldown > 0 && activeWin < 1.0;
+      const shieldActive = p.health > 0 && p.shieldCooldown > 0 && activeWin < 1.0;
       let sd = this._playerShields.get(p.id);
 
       if (shieldActive) {
@@ -768,6 +776,10 @@ export class Physics {
 
   flashPlayer(id) {
     this._playerFlash.set(id, performance.now());
+  }
+
+  perfectBlockFlash(id) {
+    this._playerPerfectFlash.set(id, performance.now());
   }
 
   bouncePlayer(id) {

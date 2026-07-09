@@ -69,6 +69,8 @@ func (s *GameSession) TickStep() {
 		}
 		if player.JustShielded {
 			activatedIDs[player.ID] = activation{skill: skillShield}
+			player.ShieldActivatedTick = s.tick
+			player.PerfectBlockUsed = false
 			player.JustShielded = false
 		}
 		if player.JustSlashed {
@@ -165,6 +167,35 @@ func (s *GameSession) TickStep() {
 					if dot >= float32(math.Cos(50*math.Pi/180)) {
 						log.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield (cone)",
 							p.ID, p.PlayerOwner, player.ID)
+						// Perfect block: fire free projectile if within timing window
+						cfg := s.Config.Shield
+						elapsed := float32(s.tick-player.ShieldActivatedTick) * 0.01667
+						if !player.PerfectBlockUsed && elapsed <= cfg.PerfectBlockWindow {
+							player.PerfectBlockUsed = true
+							pAngle := float64(player.Angle)
+							pDirX := float32(math.Sin(pAngle))
+							pDirZ := float32(math.Cos(pAngle))
+							pSpawnX := player.X + pDirX*0.3
+							pSpawnZ := player.Z + pDirZ*0.3
+							pCfg := s.Config.Projectile
+							alive = append(alive, Projectile{
+								ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
+								StartX:      pSpawnX,
+								Y:           player.Y,
+								StartZ:      pSpawnZ,
+								DirX:        pDirX,
+								DirZ:        pDirZ,
+								Speed:       pCfg.Speed,
+								MaxReach:    pCfg.MaxReach,
+								SpawnTick:   s.tick,
+								PlayerOwner: player.ID,
+							})
+							s.pendingEvents = append(s.pendingEvents, GameEvent{
+								Type:    network.EventPerfectBlock,
+								Payload: network.EncodePerfectBlockPayload(uint8(player.ID), player.X, player.Z, player.Angle),
+							})
+							log.Printf("[PERFECT BLOCK] player %d triggered perfect block, fired free projectile", player.ID)
+						}
 						hit = true
 						break
 					}

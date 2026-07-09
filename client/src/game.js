@@ -153,6 +153,8 @@ this.network = new Network(this.networkClient, this);
       for (const evt of events) {
         if (evt.type === 1) { // EVENT_SLASH
           this.onSlashEvent(evt.playerId, evt.x, evt.z, evt.angle);
+        } else if (evt.type === 2) { // EVENT_PERFECT_BLOCK
+          this.onPerfectBlockEvent(evt.playerId, evt.x, evt.z, evt.angle);
         }
       }
     }
@@ -173,6 +175,10 @@ this.network = new Network(this.networkClient, this);
       facingAngle: angle,
       coreColor: playerId === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
     });
+  }
+
+  onPerfectBlockEvent(playerId, x, z, angle) {
+    this.physics.perfectBlockFlash(playerId, x, z);
   }
 
   update(dt) {
