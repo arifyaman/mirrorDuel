@@ -11,6 +11,7 @@ type Config struct {
 	LerpFactor    float32
 	SpeedStrafe   float32
 	TurnSpeed     float32
+	KnockbackScale float32
 	Projectile    ProjectileConfig
 	Dash          DashConfig
 	Shield        ShieldConfig
@@ -59,7 +60,8 @@ func Default() *Config {
 		PlayerSpeed: 5,
 		LerpFactor:  8,
 		SpeedStrafe: 0.75,
-		TurnSpeed:   math.Pi*5.5,
+		TurnSpeed:     math.Pi*5.5,
+		KnockbackScale: 0.08,
 		Projectile: ProjectileConfig{
 			Cooldown:      3,
 			Speed:         13.5,

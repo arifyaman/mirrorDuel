@@ -52,8 +52,19 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Cone Angle**: 85° front-facing
 - **VFX**: Crescent arc mesh with additive shader (glow, streaks, sweep reveal, fade), spawns 0.3 units forward of player
 - **Server-authoritative**: Hit detection, cooldown, dash dodge, shield block all on server
-- **VFX notification**: Server sends `MSG_SLASH_EVENT` (type 18) packet with attacker ID, position, and angle — client spawns VFX directly from this event, never misses an animation
+- **VFX notification**: Server embeds `EVENT_SLASH` in STATE_SNAPSHOT events section (type 1, payload: attacker ID, position, angle) — client spawns VFX directly from embedded event, never misses an animation
 - **Mirror mechanic**: Slash activation reduces opponent's slash cooldown by 50%
+
+### Knockback & Hurt Bounce
+- **Knockback**: Server applies positional displacement on damage (both projectile and slash hits)
+  - Direction: away from damage source (projectile hit = away from projectile; slash hit = away from attacker)
+  - Magnitude: `damage * 0.08` — projectile (20 dmg) = 1.6u total, slash (4.2 dmg) = 0.34u total
+  - Implementation: `applyKnockback(dirX, dirZ, magnitude)` pushes both `TargetX/Z` (50% via lerp) and `X/Z` (50% instant)
+  - Floor clamped to ±10 units
+- **Hurt Bounce**: Client-side vertical bounce visual on health drop
+  - Triggers when client detects health decrease in snapshot
+  - Physics: initial upward velocity 4.0, gravity 15.0 — peak ~0.53u, settles in ~0.27s
+  - Applied as Y offset in `applyPlayers()`, independent of server position
 
 ### Mirror Cooldown Mechanic
 - When ANY skill activates (fire, dash, shield, OR slash), ALL cooldowns on the opponent are reduced by 50%
@@ -192,7 +203,7 @@ mirrorDuel/
 - **Read Loop**: Accumulates data, parses messages in loop
 
 ### `internal/config/config.go`
-- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5)
+- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5), KnockbackScale(0.08)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 - **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
 - **Slash**: Cooldown(0.5), Damage(4.2), HitRadius(0.95), ConeAngle(85)

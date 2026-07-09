@@ -208,6 +208,35 @@ func (p *Player) applyLerp(dt float32) {
 	p.Z += (p.TargetZ - p.Z) * alpha
 }
 
+func (p *Player) applyKnockback(dirX, dirZ float32, magnitude float32) {
+	p.TargetX += dirX * magnitude
+	p.TargetZ += dirZ * magnitude
+	p.X += dirX * magnitude * 0.5
+	p.Z += dirZ * magnitude * 0.5
+
+	halfFloor := p.Config.FloorSize / 2
+	if p.TargetX < -halfFloor {
+		p.TargetX = -halfFloor
+	} else if p.TargetX > halfFloor {
+		p.TargetX = halfFloor
+	}
+	if p.TargetZ < -halfFloor {
+		p.TargetZ = -halfFloor
+	} else if p.TargetZ > halfFloor {
+		p.TargetZ = halfFloor
+	}
+	if p.X < -halfFloor {
+		p.X = -halfFloor
+	} else if p.X > halfFloor {
+		p.X = halfFloor
+	}
+	if p.Z < -halfFloor {
+		p.Z = -halfFloor
+	} else if p.Z > halfFloor {
+		p.Z = halfFloor
+	}
+}
+
 func (p *Player) processAngleAndAim(last *network.PlayerInput) {
 	mdx := last.MouseX - p.X
 	mdz := last.MouseY - p.Z

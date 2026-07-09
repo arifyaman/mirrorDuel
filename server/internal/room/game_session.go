@@ -175,12 +175,17 @@ func (s *GameSession) TickStep() {
 					hit = true
 					break
 				}
-				player.Health -= s.Config.Projectile.Damage
-				if player.Health < 0 {
-					player.Health = 0
-				}
-				log.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f",
-					p.ID, p.PlayerOwner, player.ID, player.X, player.Z, player.Health)
+			player.Health -= s.Config.Projectile.Damage
+			if player.Health < 0 {
+				player.Health = 0
+			}
+			if dist > 0.01 {
+				knx := (player.X - px) / dist
+				knz := (player.Z - pz) / dist
+				player.applyKnockback(knx, knz, s.Config.Projectile.Damage*s.Config.KnockbackScale)
+			}
+			log.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f",
+				p.ID, p.PlayerOwner, player.ID, player.X, player.Z, player.Health)
 				hit = true
 				break
 			}
@@ -254,6 +259,11 @@ func (s *GameSession) TickStep() {
 			victim.Health -= cfg.Damage
 			if victim.Health < 0 {
 				victim.Health = 0
+			}
+			if dist > 0.01 {
+				knx := (victim.X - attacker.X) / dist
+				knz := (victim.Z - attacker.Z) / dist
+				victim.applyKnockback(knx, knz, cfg.Damage*s.Config.KnockbackScale)
 			}
 			log.Printf("[SLASH] attacker=%d hit victim=%d damage=%.0f | health=%.0f | dist=%.2f",
 				attackerID, victim.ID, cfg.Damage, victim.Health, dist)

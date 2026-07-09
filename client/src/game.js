@@ -117,6 +117,7 @@ this.network = new Network(this.networkClient, this);
         const who = isMe ? 'ME' : `P${p.id}`;
         console.log(`[CLIENT HIT] ${who} took ${dmg} damage (${p.health} HP remaining)`);
         this.physics.flashPlayer(p.id);
+        this.physics.bouncePlayer(p.id);
         if (isMe) this.ui.showHitIndicator();
         if (p.health <= 0 && prev > 0) {
           const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
@@ -180,6 +181,7 @@ this.network = new Network(this.networkClient, this);
     this.physics.updateExplosions();
     this.physics.updateDashTrails();
     this.physics.updateSlashes(dt);
+    this.physics.updateHurtBounces(dt);
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;

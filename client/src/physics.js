@@ -15,6 +15,7 @@ export class Physics {
     this._prevPlayerPos = new Map();
     this._playerShields = new Map();
     this._slashes = [];
+    this._hurtBounces = new Map();
     this.app = app;
   }
 
@@ -56,6 +57,11 @@ export class Physics {
       }
 
       entity.setPosition(p.x, p.y, p.z);
+
+      const bounce = this._hurtBounces.get(p.id);
+      if (bounce) {
+        entity.setPosition(p.x, p.y + bounce.offset, p.z);
+      }
       const angleDeg = (typeof p.angle === 'number' && !isNaN(p.angle)) ? (p.angle + Math.PI) * (180 / Math.PI) : 0;
       entity.setEulerAngles(0, angleDeg, 0);
       entity.enabled = p.health > 0;
@@ -762,6 +768,21 @@ export class Physics {
 
   flashPlayer(id) {
     this._playerFlash.set(id, performance.now());
+  }
+
+  bouncePlayer(id) {
+    this._hurtBounces.set(id, { offset: 0, velocity: 4.0 });
+  }
+
+  updateHurtBounces(dt) {
+    for (const [id, b] of this._hurtBounces) {
+      b.velocity -= 15.0 * dt;
+      b.offset += b.velocity * dt;
+      if (b.offset <= 0) {
+        b.offset = 0;
+        this._hurtBounces.delete(id);
+      }
+    }
   }
 
   updateExplosions() {
