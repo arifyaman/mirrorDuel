@@ -10,23 +10,21 @@ import (
 	"mirror-duel-server-go/internal/network"
 )
 
-// SlashEvent records a slash attack for broadcast to clients.
-type SlashEvent struct {
-	PlayerID uint8
-	X        float32
-	Z        float32
-	Angle    float32
+// GameEvent records a game event for broadcast to clients (embedded in STATE_SNAPSHOT).
+type GameEvent struct {
+	Type    uint8
+	Payload []byte
 }
 
 // GameSession mirrors the TypeScript GameSession (a 1v1 room).
 type GameSession struct {
-	RoomID            int
-	tick              int
-	Config            *config.Config
-	mu                sync.Mutex
-	Players           map[int]*Player
-	Projectiles       []Projectile
-	pendingSlashEvents []SlashEvent
+	RoomID          int
+	tick            int
+	Config          *config.Config
+	mu              sync.Mutex
+	Players         map[int]*Player
+	Projectiles     []Projectile
+	pendingEvents []GameEvent
 }
 
 var projectileIDCounter int32
@@ -264,11 +262,10 @@ func (s *GameSession) TickStep() {
 
 	// Collect slash events for client VFX (all slashes, not just hits)
 	for _, attacker := range slashActivated {
-		s.pendingSlashEvents = append(s.pendingSlashEvents, SlashEvent{
-			PlayerID: uint8(attacker.ID),
-			X:        attacker.X,
-			Z:        attacker.Z,
-			Angle:    attacker.Angle,
+		evtPayload := network.EncodeSlashPayload(uint8(attacker.ID), attacker.X, attacker.Z, attacker.Angle)
+		s.pendingEvents = append(s.pendingEvents, GameEvent{
+			Type:    network.EventSlash,
+			Payload: evtPayload,
 		})
 	}
 
@@ -318,10 +315,10 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 	return
 }
 
-// GetSlashEvents returns and clears pending slash events for this tick.
-func (s *GameSession) GetSlashEvents() []SlashEvent {
-	events := s.pendingSlashEvents
-	s.pendingSlashEvents = nil
+// GetPendingEvents returns and clears pending events for this tick.
+func (s *GameSession) GetPendingEvents() []GameEvent {
+	events := s.pendingEvents
+	s.pendingEvents = nil
 	return events
 }
 

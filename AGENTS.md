@@ -136,21 +136,23 @@ mirrorDuel/
 - **Slash Input**: mousedown/mouseup sets `inputSlash` flag (0x08) for slash skill activation
 
 ### `src/game.js`
-- **Slash VFX**: `onSlashEvent()` handler receives `MSG_SLASH_EVENT` from server and spawns crescent VFX at the reported position/angle — no cooldown state interpretation needed
+- **Slash VFX**: `onSlashEvent()` processes slash events embedded in STATE_SNAPSHOT snapshots and spawns crescent VFX at the reported position/angle
 
 ### `src/network/protocol.js`
 - **Binary Encoding**: `encodePlayerInput()` - 13 bytes (tick:2, moveX:1, moveZ:1, mouseX:4, mouseY:4, flags:1)
   - flags: `0x01` = fire, `0x02` = dash, `0x04` = shield, `0x08` = slash
-- **Binary Decoding**: `decodeStateSnapshot()` - variable length, players + projectiles
+- **Binary Decoding**: `decodeStateSnapshot()` - variable length, players + projectiles + events
   - Player: 37 bytes (1 u8 + 9 f32) — includes shieldCooldown, slashCooldown
-- **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), SLASH_EVENT(18), DISCONNECT(255)
+  - Events: `[eventCount: u8][events...]` — each event: `[eventType: u8][payload: varies]`
+- **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), DISCONNECT(255)
+- **Event Types**: EVENT_SLASH(1) — `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes)
 
 ### Entity System
 - **Player Entities**: Created dynamically from server state
 - **Red/Blue**: Player 1 = red, Player 2 = blue
 - **Indicator**: Green strip showing forward direction (opponent only)
 - **Projectile Entities**: Spawn at start position, compute position from tick delta
-- **Slash VFX**: Crescent mesh with additive shader, sweep reveal animation, fade out — triggered by server `MSG_SLASH_EVENT` packet, never misses an animation
+- **Slash VFX**: Crescent mesh with additive shader, sweep reveal animation, fade out — triggered by server events embedded in STATE_SNAPSHOT, never misses an animation
 - **Entity Cleanup**: `applyPlayers()` destroys entities for player IDs absent from snapshot (mirrors `applyProjectiles()` pattern); disconnecting opponents disappear naturally
 
 ## Server Architecture
@@ -175,12 +177,12 @@ mirrorDuel/
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
 - **Player ID**: Picks first free slot from {1, 2} (not `len+1`), so either player leaving and rejoining works correctly
 - **Input Processing**: Queues inputs, triggers skill activation
-- **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room; also broadcasts SLASH_EVENT packets when slash attacks occur
+- **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room; events (slash VFX, etc.) are embedded in the snapshot
 - **Disconnect**: Removes player from room, keeps room open for replacement (only deletes empty rooms)
 
 ### `internal/network/protocol.go`
 - **Length-Prefixed Framing**: `encodeFrame(msgType, data)` → `[length: u32 LE][msgType: u8][payload]`
-- **Encoding**: `encodeStateSnapshot()` - 37 bytes per player, 31 bytes per projectile; `encodeSlashEvent()` - 13 bytes (playerId + x + z + angle)
+- **Encoding**: `encodeStateSnapshot()` - 37 bytes per player, 31 bytes per projectile; events embedded in snapshot tail
 - **Decoding**: `decodePlayerInput()` - validates 13-byte input
 - **Read Loop**: Handles multiple coalesced messages per read
 
@@ -216,14 +218,14 @@ mirrorDuel/
 ### Server → Client
 | Type | Name | Size | Format |
 |------|------|------|--------|
-| 16 | STATE_SNAPSHOT | variable | `[tick: u16][playerCount: u8][players...][projCount: u8][projectiles...]` |
+| 16 | STATE_SNAPSHOT | variable | `[tick: u16][playerCount: u8][players...][projCount: u8][projectiles...][eventCount: u8][events...]` |
 | 17 | ROOM_CREATED | variable | `[roomId: u16][myPlayerId: u8][opponentNameLen: u8][name: bytes]` |
-| 18 | SLASH_EVENT | 13 | `[playerId: u8][x: f32][z: f32][angle: f32]` |
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
 - **Player**: `[id: u8][x: f32][y: f32][z: f32][angle: f32][cooldown: f32][health: f32][dashCooldown: f32][shieldCooldown: f32][slashCooldown: f32]` (37 bytes, 9 floats)
 - **Projectile**: `[id: u8][spawnTick: u16][startX: f32][y: f32][startZ: f32][dirX: f32][dirZ: f32][speed: f32][maxReach: f32]` (31 bytes)
+- **Event**: `[eventType: u8][payload: varies]` — event sub-types: EVENT_SLASH(1) = `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes)
 
 ## Git & Deployment
 

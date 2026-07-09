@@ -175,8 +175,8 @@ export class Physics {
       uniform vec3 uColor;
       uniform vec3 uCameraPos;
       uniform float uTime;
-      uniform float uCellScale;
-      uniform float uCrackWidth;
+      uniform float uHexScale;
+      uniform float uLineWidth;
       uniform float uFresnelPower;
       uniform float uPulseSpeed;
       uniform float uHitTime;
@@ -184,40 +184,17 @@ export class Physics {
       uniform float uPlayerAngle;
       uniform float uConeAngle;
 
-      vec3 hash3(vec3 p) {
-          p = vec3(
-              dot(p, vec3(127.1, 311.7, 74.7)),
-              dot(p, vec3(269.5, 183.3, 246.1)),
-              dot(p, vec3(113.5, 271.9, 124.6))
-          );
-          return fract(sin(p) * 43758.5453123);
-      }
-
-      vec3 voronoi(vec3 x) {
-          vec3 p = floor(x);
-          vec3 f = fract(x);
-          float minDist1 = 8.0;
-          float minDist2 = 8.0;
-          vec3 minPoint = vec3(0.0);
-          for (int i = -1; i <= 1; i++) {
-            for (int j = -1; j <= 1; j++) {
-              for (int k = -1; k <= 1; k++) {
-                vec3 b = vec3(float(i), float(j), float(k));
-                vec3 randOff = hash3(p + b);
-                vec3 r = b + randOff - f;
-                float d = dot(r, r);
-                if (d < minDist1) {
-                  minDist2 = minDist1;
-                  minDist1 = d;
-                  minPoint = p + b + randOff;
-                } else if (d < minDist2) {
-                  minDist2 = d;
-                }
-              }
-            }
-          }
-          return vec3(sqrt(minDist1), sqrt(minDist2),
-                      fract(sin(dot(minPoint, vec3(12.9898, 78.233, 45.164))) * 43758.5453));
+      vec2 hexGrid(vec2 p) {
+          const vec2 r = vec2(1.0, 1.7320508);
+          vec2 h = r * 0.5;
+          vec2 a = mod(p, r) - h;
+          vec2 b = mod(p - h, r) - h;
+          vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+          vec2 ag = abs(gv);
+          float edgeDist = 0.5 - max(ag.x, ag.x * 0.5 + ag.y * 0.866);
+          vec2 id = p - gv;
+          float cellId = fract(sin(dot(id, vec2(12.9898, 78.233))) * 43758.5453);
+          return vec2(edgeDist, cellId);
       }
 
       void main(void) {
@@ -226,40 +203,38 @@ export class Physics {
           float ndv = abs(dot(N, V));
           float fresnel = pow(1.0 - ndv, uFresnelPower);
 
-          vec3 samplePos = normalize(vNormalObj) * uCellScale + vec3(0.0, uTime * 1.2, uTime * 0.6);
-          vec3 vr = voronoi(samplePos);
-          float edgeDist = vr.y - vr.x;
+          vec2 hexUV = normalize(vNormalObj).xz * uHexScale + vec2(uTime * 0.3, uTime * 0.5);
+          vec2 hg = hexGrid(hexUV);
+          float edgeDist = hg.x;
+          float cellId = hg.y;
 
-          float crack = smoothstep(0.0, uCrackWidth, edgeDist);
-          float cellBrightness = mix(0.15, 1.0, vr.z * 0.6 + 0.4);
+          float hexLine = 1.0 - smoothstep(0.0, uLineWidth, edgeDist);
+          float cellBright = mix(0.3, 1.0, cellId * 0.5 + 0.5);
 
-          vec3 darkCol = uColor * 0.03;
-          vec3 brightCol = uColor * cellBrightness * 1.2;
-          vec3 baseCol = mix(darkCol, brightCol, crack);
+          vec3 lineCol = uColor * 1.5;
+          vec3 cellCol = uColor * cellBright * 0.4;
+          vec3 baseCol = mix(cellCol, lineCol, hexLine);
 
           float pulse = 0.92 + 0.08 * sin(uTime * uPulseSpeed * 3.14159);
 
           float hitAge = uTime - uHitTime;
-          float hitPulse = 0.0;
-          if (hitAge >= 0.0 && hitAge < 1.2) {
-              hitPulse = (1.0 - hitAge / 1.2) * 1.5;
-          }
+          float hitMask = step(0.0, hitAge) * step(hitAge, 1.2);
+          float hitPulse = hitMask * (1.0 - hitAge / 1.2) * 1.5;
 
           vec3 rimColor = mix(uColor, vec3(1.0, 0.95, 0.98), 0.25) * (fresnel * 0.7 + hitPulse * 0.5);
 
           vec3 finalColor = baseCol * pulse + rimColor * 0.8;
-          float alpha = clamp(crack * 0.55 + fresnel * 0.55 + hitPulse * 0.5 + 0.22, 0.0, 1.0);
+          float alpha = clamp(hexLine * 0.6 + fresnel * 0.55 + hitPulse * 0.5 + 0.15, 0.0, 1.0);
 
-          // Cone culling with voronoi-jittered boundary
           vec3 dir = normalize(vPositionW - uPlayerPos);
           vec2 dirXZ = normalize(dir.xz);
           vec2 facing = vec2(sin(uPlayerAngle), cos(uPlayerAngle));
           float dp = dot(dirXZ, facing);
           float coneDot = cos(uConeAngle);
 
-          float cellJitter = (vr.z - 0.5) * 0.15;
-          float crackJitter = (1.0 - smoothstep(0.0, uCrackWidth * 2.0, edgeDist)) * 0.06;
-          float localCone = coneDot + cellJitter - crackJitter;
+          float cellJitter = (cellId - 0.5) * 0.15;
+          float lineJitter = (1.0 - smoothstep(0.0, uLineWidth * 2.0, edgeDist)) * 0.06;
+          float localCone = coneDot + cellJitter - lineJitter;
 
           float coneAlpha = smoothstep(localCone - 0.06, localCone + 0.06, dp);
           alpha *= coneAlpha;
@@ -288,8 +263,8 @@ export class Physics {
     this.app.root.addChild(entity);
 
     mat.setParameter('uColor', color);
-    mat.setParameter('uCellScale', 3.0);
-    mat.setParameter('uCrackWidth', 0.06);
+    mat.setParameter('uHexScale', 3.5);
+    mat.setParameter('uLineWidth', 0.08);
     mat.setParameter('uFresnelPower', 2.5);
     mat.setParameter('uPulseSpeed', 0.5);
     mat.setParameter('uHitTime', -10);

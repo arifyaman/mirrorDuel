@@ -13,7 +13,6 @@ type SessionIface interface {
 	PlayerID() int
 	SendSnapshot(data []byte)
 	SendRoomCreated(data []byte)
-	SendSlashEvent(data []byte)
 	SendDisconnect()
 }
 
@@ -74,7 +73,7 @@ func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 	for _, room := range m.Rooms {
 		if room.RoomID == int(result.RoomID) {
 			tick, players, projectiles := room.GetSnapshot()
-			data := network.EncodeStateSnapshot(tick, players, projectiles)
+			data := network.EncodeStateSnapshot(tick, players, projectiles, nil)
 			for _, p := range room.Players {
 				if p.Session != nil {
 					p.Session.SendSnapshot(data)
@@ -201,15 +200,15 @@ func (m *RoomManager) broadcast() {
 			continue
 		}
 		tick, players, projectiles := room.GetSnapshot()
-		data := network.EncodeStateSnapshot(tick, players, projectiles)
-		slashEvents := room.GetSlashEvents()
+		roomEvents := room.GetPendingEvents()
+		events := make([]network.GameEvent, len(roomEvents))
+		for i, e := range roomEvents {
+			events[i] = network.GameEvent{Type: e.Type, Payload: e.Payload}
+		}
+		data := network.EncodeStateSnapshot(tick, players, projectiles, events)
 		for _, player := range room.Players {
 			if player.Session != nil {
 				player.Session.SendSnapshot(data)
-				for _, evt := range slashEvents {
-					evtData := network.EncodeSlashEvent(evt.PlayerID, evt.X, evt.Z, evt.Angle)
-					player.Session.SendSlashEvent(evtData)
-				}
 			}
 		}
 	}

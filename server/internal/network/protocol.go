@@ -7,14 +7,16 @@ import (
 
 // Message type constants — must match the TypeScript client and server.
 const (
-	MSGJoinRoom       = 1
-	MSGPlayerInput    = 2
-	MSGStateSnapshot  = 16
-	MSGRoomCreated    = 17
-	MSGDisconnect     = 255
-	MSGSlashEvent     = 18
+	MSGJoinRoom      = 1
+	MSGPlayerInput   = 2
+	MSGStateSnapshot = 16
+	MSGRoomCreated   = 17
+	MSGDisconnect    = 255
 
 	InputSize = 13
+
+	// Game event sub-types embedded in STATE_SNAPSHOT.
+	EventSlash = 1
 )
 
 // PlayerInput matches the binary layout from client protocol.
@@ -90,12 +92,22 @@ type ProjectileSnapshot struct {
 	MaxReach  float32
 }
 
+// GameEvent is a generic event embedded in STATE_SNAPSHOT.
+type GameEvent struct {
+	Type    uint8
+	Payload []byte
+}
+
 // EncodeStateSnapshot produces a variable-length snapshot payload:
-// [tick: u16][playerCount: u8][players...][projCount: u8][projectiles...]
-func EncodeStateSnapshot(tick uint16, players []PlayerSnapshot, projectiles []ProjectileSnapshot) []byte {
+// [tick: u16][playerCount: u8][players...][projCount: u8][projectiles...][eventCount: u8][events...]
+func EncodeStateSnapshot(tick uint16, players []PlayerSnapshot, projectiles []ProjectileSnapshot, events []GameEvent) []byte {
 	pc := len(players)
 	pj := len(projectiles)
-	size := 2 + 1 + pc*SnapshotPlayerSize + 1 + pj*SnapshotProjectileSize
+	ec := len(events)
+	size := 2 + 1 + pc*SnapshotPlayerSize + 1 + pj*SnapshotProjectileSize + 1
+	for _, e := range events {
+		size += 1 + len(e.Payload) // type byte + payload
+	}
 	buf := make([]byte, size)
 	b := 0
 	binary.LittleEndian.PutUint16(buf[b:b+2], tick)
@@ -150,6 +162,15 @@ func EncodeStateSnapshot(tick uint16, players []PlayerSnapshot, projectiles []Pr
 		b += 4
 	}
 
+	buf[b] = uint8(ec)
+	b += 1
+	for _, e := range events {
+		buf[b] = e.Type
+		b += 1
+		copy(buf[b:], e.Payload)
+		b += len(e.Payload)
+	}
+
 	return buf
 }
 
@@ -164,8 +185,8 @@ func EncodeRoomCreated(roomID uint16, myPlayerID uint8, opponentName string) []b
 	return buf
 }
 
-// EncodeSlashEvent produces: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
-func EncodeSlashEvent(playerId uint8, x, z, angle float32) []byte {
+// EncodeSlashPayload produces the payload for a slash event: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
+func EncodeSlashPayload(playerId uint8, x, z, angle float32) []byte {
 	buf := make([]byte, 13)
 	buf[0] = playerId
 	binary.LittleEndian.PutUint32(buf[1:5], math.Float32bits(x))

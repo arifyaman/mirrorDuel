@@ -70,8 +70,7 @@ this.network = new Network(this.networkClient, this);
     this.networkClient.onJoin((roomId, myPlayerId) => {
       this.network.onJoin(myPlayerId);
     });
-    this.networkClient.onSnap((tick, players, projectiles) => this.onSnap(tick, players, projectiles));
-    this.networkClient.onSlashEvent((playerId, x, z, angle) => this.onSlashEvent(playerId, x, z, angle));
+    this.networkClient.onSnap((tick, players, projectiles, events) => this.onSnap(tick, players, projectiles, events));
 
     this.app.on('update', (dt) => this.update(dt));
     this.app.start();
@@ -88,7 +87,7 @@ this.network = new Network(this.networkClient, this);
     statusEl.style.color = state === 'connected' ? '#0f0' : state === 'connecting' || state === 'reconnecting' ? '#ff0' : '#f00';
   }
 
-  onSnap(tick, players, projectiles) {
+  onSnap(tick, players, projectiles, events) {
     const serverTime = tick * DT;
     this.physics.simTime += (serverTime - this.physics.simTime) * 0.1;
 
@@ -147,6 +146,15 @@ this.network = new Network(this.networkClient, this);
 
     this.physics.applySnapshot(players, projectiles);
     this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7], this.network.myPlayerId);
+
+    // Process game events from snapshot
+    if (events) {
+      for (const evt of events) {
+        if (evt.type === 1) { // EVENT_SLASH
+          this.onSlashEvent(evt.playerId, evt.x, evt.z, evt.angle);
+        }
+      }
+    }
   }
 
   recreateHUD() {

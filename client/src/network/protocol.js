@@ -3,8 +3,10 @@ export const MSG_JOIN_ROOM = 1;
 export const MSG_PLAYER_INPUT = 2;
 export const MSG_STATE_SNAPSHOT = 16;
 export const MSG_ROOM_CREATED = 17;
-export const MSG_SLASH_EVENT = 18;
 export const MSG_DISCONNECT = 255;
+
+// Game event sub-types embedded in STATE_SNAPSHOT
+export const EVENT_SLASH = 1;
 
 export const INPUT_SIZE = 13;
 
@@ -65,7 +67,23 @@ const players = [];
     projectiles.push({ id, spawnTick, startX, y, startZ, dirX, dirZ, speed, maxReach });
   }
 
-  return { tick, players, projectiles };
+  // Parse events section
+  const events = [];
+  if (off < data.length) {
+    const eventCount = dv.getUint8(off); off += 1;
+    for (let i = 0; i < eventCount; i++) {
+      const eventType = dv.getUint8(off); off += 1;
+      if (eventType === EVENT_SLASH) {
+        const playerId = dv.getUint8(off); off += 1;
+        const x = dv.getFloat32(off, true); off += 4;
+        const z = dv.getFloat32(off, true); off += 4;
+        const angle = dv.getFloat32(off, true); off += 4;
+        events.push({ type: eventType, playerId, x, z, angle });
+      }
+    }
+  }
+
+  return { tick, players, projectiles, events };
 }
 
 export function decodeRoomCreated(data) {
@@ -76,14 +94,4 @@ export function decodeRoomCreated(data) {
   const nameLen = dv.getUint8(3);
   const opponentName = new TextDecoder().decode(data.slice(4, 4 + nameLen));
   return { roomId, myPlayerId, opponentName };
-}
-
-export function decodeSlashEvent(data) {
-  if (data.length < 13) return null;
-  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const playerId = dv.getUint8(0);
-  const x = dv.getFloat32(1, true);
-  const z = dv.getFloat32(5, true);
-  const angle = dv.getFloat32(9, true);
-  return { playerId, x, z, angle };
 }
