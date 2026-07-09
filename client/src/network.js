@@ -7,10 +7,12 @@ export class Network {
 
   onJoin(myPlayerId) {
     this.myPlayerId = myPlayerId;
+    this.game.ui.clearDeathLabels();
   }
 
   onDisconnect() {
     this.game.physics.cleanupPlayerEntities();
+    this.game.ui.clearDeathLabels();
     this.game.recreateHUD();
   }
 }

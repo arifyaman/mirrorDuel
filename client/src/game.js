@@ -126,6 +126,10 @@ this.network = new Network(this.networkClient, this);
           console.log(`[DEATH] ${who} died!`);
         }
       }
+      // Clear death labels if a dead player is alive again (room reset)
+      if (prev !== undefined && prev <= 0 && p.health > 0) {
+        this.ui.clearDeathLabels();
+      }
       this._prevHealth[p.id] = p.health;
     }
 

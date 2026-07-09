@@ -325,6 +325,7 @@ export class UI {
   showDeathLabel(isMe) {
     const label = document.createElement('div');
     label.textContent = isMe ? 'GOT SHIT ON!' : 'WINNER!';
+    label.className = 'death-label';
     label.style.cssText = `
       position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
       font-family:'Impact','Arial Black',sans-serif;font-size:72px;font-weight:900;
@@ -335,6 +336,10 @@ export class UI {
     `;
     document.body.appendChild(label);
     requestAnimationFrame(() => { label.style.opacity = '1'; });
+  }
+
+  clearDeathLabels() {
+    document.querySelectorAll('.death-label').forEach(el => el.remove());
   }
 
   destroy() {
