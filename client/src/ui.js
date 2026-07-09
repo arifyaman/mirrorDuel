@@ -131,7 +131,7 @@ export class UI {
       const fullWidth = 1.6;
       bar.enabled = true;
       bar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
-      bar.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.15, p.z);
+      bar.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.3, p.z);
     }
     for (const [id, bar] of this.slashBarEntities) {
       const found = players.some(p => p.id === id && p.id === myPlayerId);
@@ -171,38 +171,38 @@ export class UI {
 
     const fullWidth = 1.6;
 
-    // Fire bar (red) — y+1.3
+    // Fire bar (red) — y+1.2
     const fireCd = myPlayer.cooldown || 0;
     if (fireCd > 0) {
       if (!this.fireBar) this.fireBar = this._createSkillCooldownBar('fireCd', [1.0, 0.27, 0.27]);
       const ratio = Math.max(0, Math.min(1, 1 - fireCd / 3));
       this.fireBar.enabled = true;
       this.fireBar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
-      this.fireBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.3, myPlayer.z);
+      this.fireBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.2, myPlayer.z);
     } else if (this.fireBar) {
       this.fireBar.enabled = false;
     }
 
-    // Shield bar (blue) — y+1.25
+    // Shield bar (blue) — y+1.15
     const shieldCd = myPlayer.shieldCooldown || 0;
     if (shieldCd > 0) {
       if (!this.shieldBar) this.shieldBar = this._createSkillCooldownBar('shieldCd', [0.27, 0.53, 1.0]);
       const ratio = Math.max(0, Math.min(1, 1 - shieldCd / 7));
       this.shieldBar.enabled = true;
       this.shieldBar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
-      this.shieldBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.25, myPlayer.z);
+      this.shieldBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.15, myPlayer.z);
     } else if (this.shieldBar) {
       this.shieldBar.enabled = false;
     }
 
-    // Dash bar (yellow) — y+1.2
+    // Dash bar (yellow) — y+1.25
     const dashCd = myPlayer.dashCooldown || 0;
     if (dashCd > 0) {
       if (!this.dashBar) this.dashBar = this._createSkillCooldownBar('dashCd', [1.0, 0.67, 0.0]);
       const ratio = Math.max(0, Math.min(1, 1 - dashCd / 7));
       this.dashBar.enabled = true;
       this.dashBar.setLocalScale(fullWidth * ratio, 0.04, 0.04);
-      this.dashBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.2, myPlayer.z);
+      this.dashBar.setPosition(myPlayer.x + (ratio - 1) * fullWidth * 0.5, myPlayer.y + 1.25, myPlayer.z);
     } else if (this.dashBar) {
       this.dashBar.enabled = false;
     }
