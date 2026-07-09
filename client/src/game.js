@@ -16,6 +16,7 @@ import { Physics } from './physics/index.js';
 import { Input } from './input.js';
 import { UI } from './ui.js';
 import { GameTitle } from './game-title.js';
+import { HelpModal } from './help-modal.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
@@ -59,6 +60,7 @@ this.network = new Network(this.networkClient, this);
     this._myPlayerAngle = 0;
     this._cameraTarget = { x: 0, z: 0 };
     this.gameTitle = new GameTitle();
+    this.helpModal = new HelpModal();
     this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
   }
 
@@ -215,10 +217,11 @@ this.network = new Network(this.networkClient, this);
     }
     const myId = this.network.myPlayerId;
     const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
-    const moveX = dead ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
-    const moveZ = dead ? 0 : (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
+    const paused = this.helpModal && this.helpModal.isOpen;
+    const moveX = dead || paused ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
+    const moveZ = dead || paused ? 0 : (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
     let flags = 0;
-    if (!dead) {
+    if (!dead && !paused) {
       if (this.input.fire) flags |= 0x01;
       if (this.input.dash) flags |= 0x02;
       if (this.input.shield) flags |= 0x04;
