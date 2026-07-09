@@ -237,7 +237,8 @@ func (s *GameSession) TickStep() {
 			if victim.ShieldActive {
 				victimFacingX := float32(math.Sin(float64(victim.Angle)))
 				victimFacingZ := float32(math.Cos(float64(victim.Angle)))
-				blockDot := victimDirX*victimFacingX + victimDirZ*victimFacingZ
+				// Direction from victim to attacker (where the slash comes from)
+				blockDot := (-victimDirX)*victimFacingX + (-victimDirZ)*victimFacingZ
 				if blockDot >= float32(math.Cos(50*math.Pi/180)) {
 					// Blocked by shield
 					continue

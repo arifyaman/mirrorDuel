@@ -303,7 +303,7 @@ export class Physics {
         coneFrac = coneFrac * (2 - coneFrac);
       } else if (t > 1 - closeDuration / activeDuration) {
         const closeT = (t - (1 - closeDuration / activeDuration)) * activeDuration / closeDuration;
-        coneFrac = 1 - Math.min(closeT, 1) * (2 - Math.min(closeT, 1));
+        coneFrac = 1 - Math.min(closeT, 1);
       } else {
         coneFrac = 1;
       }
