@@ -183,6 +183,7 @@ export class Physics {
       uniform vec3 uPlayerPos;
       uniform float uPlayerAngle;
       uniform float uConeAngle;
+      uniform float uConeFrac;
 
       vec2 hexGrid(vec2 p) {
           const vec2 r = vec2(1.0, 1.7320508);
@@ -237,7 +238,7 @@ export class Physics {
           float localCone = coneDot + cellJitter - lineJitter;
 
           float coneAlpha = smoothstep(localCone - 0.06, localCone + 0.06, dp);
-          alpha *= coneAlpha;
+          alpha *= coneAlpha * uConeFrac;
           if (alpha < 0.01) discard;
 
           gl_FragColor = vec4(finalColor, alpha);
@@ -269,6 +270,7 @@ export class Physics {
     mat.setParameter('uPulseSpeed', 0.5);
     mat.setParameter('uHitTime', -10);
     mat.setParameter('uConeAngle', 0);
+    mat.setParameter('uConeFrac', 0);
     mat.setParameter('uPlayerAngle', 0);
 
     return { entity, mat, time: 0, shieldCooldown: 0, playerAngle: 0, playerPos: { x: 0, y: 0, z: 0 } };
@@ -308,6 +310,7 @@ export class Physics {
         coneFrac = 1;
       }
       mat.setParameter('uConeAngle', coneFrac * maxConeAngle);
+      mat.setParameter('uConeFrac', coneFrac);
     }
   }
 
