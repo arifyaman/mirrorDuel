@@ -62,16 +62,19 @@ func (s *GameSession) TickStep() {
 			activatedIDs[player.ID] = activation{skill: skillFire}
 			firedPlayers[player.ID] = player
 			player.JustFired = false
+			player.healSkill(s.Config.SkillHealAmount)
 		}
 		if player.JustDashed {
 			activatedIDs[player.ID] = activation{skill: skillDash}
 			player.JustDashed = false
+			player.healSkill(s.Config.SkillHealAmount)
 		}
 		if player.JustShielded {
 			activatedIDs[player.ID] = activation{skill: skillShield}
 			player.ShieldActivatedTick = s.tick
 			player.PerfectBlockUsed = false
 			player.JustShielded = false
+			player.healSkill(s.Config.SkillHealAmount)
 		}
 		if player.JustSlashed {
 			activatedIDs[player.ID] = activation{skill: skillSlash}
@@ -406,7 +409,7 @@ func (s *GameSession) Reset() {
 		}
 		p.TargetX = p.X
 		p.TargetZ = p.Z
-		p.Health = 100
+		p.Health = s.Config.MaxHealth
 		p.Cooldown = 0
 		p.DashCooldown = 0
 		p.ShieldCooldown = 0

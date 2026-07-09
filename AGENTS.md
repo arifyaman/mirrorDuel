@@ -67,6 +67,13 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
   - Physics: initial upward velocity 4.0, gravity 15.0 — peak ~0.53u, settles in ~0.27s
   - Applied as Y offset in `applyPlayers()`, independent of server position
 
+### Health-on-Skill-Use Regen
+- **Activation**: Fire, Dash, and Shield heal `SkillHealAmount` HP (config, default 2) when used
+- **Slash does NOT heal** — pure damage skill, no healing reward
+- **Max HP**: Clamped to `MaxHealth` (config, default 100), no overheal
+- Creates tension with mirror mechanic: healing yourself vs giving opponent cooldown reduction
+- Balance: Fire (3s cd) → 0.67 HP/sec, Dash/Shield (7s cd) → 0.29 HP/sec each
+
 ### Mirror Cooldown Mechanic
 - When ANY skill activates (fire, dash, shield, OR slash), ALL cooldowns on the opponent are reduced by 50%
 - Fire activation reduces opponent's fire cooldown by 50%
@@ -183,7 +190,7 @@ mirrorDuel/
 - **Projectile**: Created on R key, tracked by traveled distance, removed when reaching maxReach
 - **Slash**: Instant hit detection (85° cone, 0.95 radius), mirror cooldown reduction
 - **Mirror Cooldowns**: Each skill activation reduces only the same skill on opponent by 50% (fire→fire, dash→dash, shield→shield, slash→slash)
-- **Room Reset**: When 2nd player joins, `Reset()` places both players at spawn positions (P1: -2/-0.2, P2: 2/-0.2) with full health, zero cooldowns, cleared projectiles; P1 faces +X (π/2), P2 faces -X (-π/2)
+- **Room Reset**: When 2nd player joins, `Reset()` places both players at spawn positions (P1: -2/-0.2, P2: 2/-0.2) with MaxHealth, zero cooldowns, cleared projectiles; P1 faces +X (π/2), P2 faces -X (-π/2)
 
 ### `internal/room/room_manager.go`
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
@@ -204,7 +211,7 @@ mirrorDuel/
 - **Read Loop**: Accumulates data, parses messages in loop
 
 ### `internal/config/config.go`
-- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5), KnockbackScale(0.08)
+- **Config**: FloorSize(20), PlayerSpeed(5), LerpFactor(8), SpeedStrafe(0.75), TurnSpeed(π*5.5), KnockbackScale(0.08), MaxHealth(100), SkillHealAmount(2)
 - **Projectile**: Cooldown(3), Speed(13.5), MaxReach(8), MaxParticles(18), BurstSpeed(8), BurstDuration(1.5)
 - **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
 - **Shield**: Cooldown(7), ActiveDuration(1), PerfectBlockWindow(0.3)

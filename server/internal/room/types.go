@@ -73,7 +73,7 @@ func NewPlayer(id int, name string, x, y, z float32, cfg *config.Config) *Player
 		X:         x,
 		Y:         y,
 		Z:         z,
-		Health:    100,
+		Health:    cfg.MaxHealth,
 		TargetX:   x,
 		TargetZ:   z,
 		Config:    cfg,
@@ -236,6 +236,13 @@ func (p *Player) applyKnockback(dirX, dirZ float32, magnitude float32) {
 		p.Z = -halfFloor
 	} else if p.Z > halfFloor {
 		p.Z = halfFloor
+	}
+}
+
+func (p *Player) healSkill(amount float32) {
+	p.Health += amount
+	if p.Health > p.Config.MaxHealth {
+		p.Health = p.Config.MaxHealth
 	}
 }
 

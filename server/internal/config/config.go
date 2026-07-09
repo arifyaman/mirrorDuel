@@ -12,7 +12,9 @@ type Config struct {
 	SpeedStrafe   float32
 	TurnSpeed     float32
 	KnockbackScale float32
-	Projectile    ProjectileConfig
+	MaxHealth       float32
+	SkillHealAmount float32
+	Projectile      ProjectileConfig
 	Dash          DashConfig
 	Shield        ShieldConfig
 	Slash         SlashConfig
@@ -63,6 +65,8 @@ func Default() *Config {
 		SpeedStrafe: 0.75,
 		TurnSpeed:     math.Pi*5.5,
 		KnockbackScale: 0.08,
+		MaxHealth:      100,
+		SkillHealAmount: 2,
 		Projectile: ProjectileConfig{
 			Cooldown:      3,
 			Speed:         13.5,
@@ -81,7 +85,7 @@ func Default() *Config {
 		Shield: ShieldConfig{
 			Cooldown:           7,
 			ActiveDuration:     1,
-			PerfectBlockWindow: 0.3,
+			PerfectBlockWindow: 0.20,
 		},
 		Slash: SlashConfig{
 			Cooldown:   0.5,
