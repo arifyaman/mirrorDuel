@@ -63,7 +63,7 @@ func EncodePlayerInput(tick uint16, moveX int8, moveZ int8, mouseX, mouseY float
 const (
 	// Snapshot record sizes must match the TypeScript encoder.
 	SnapshotPlayerSize     = 37 // u8 + 9*f32
-	SnapshotProjectileSize = 31 // u8 + u16 + 7*f32
+	SnapshotProjectileSize = 32 // u8 + u16 + 7*f32 + u8 (ownerId)
 )
 
 // PlayerSnapshot is the data needed for encoding a player in STATE_SNAPSHOT.
@@ -91,6 +91,7 @@ type ProjectileSnapshot struct {
 	DirZ      float32
 	Speed     float32
 	MaxReach  float32
+	OwnerID   uint8
 }
 
 // GameEvent is a generic event embedded in STATE_SNAPSHOT.
@@ -161,6 +162,8 @@ func EncodeStateSnapshot(tick uint16, players []PlayerSnapshot, projectiles []Pr
 		b += 4
 		binary.LittleEndian.PutUint32(buf[b:b+4], math.Float32bits(p.MaxReach))
 		b += 4
+		buf[b] = p.OwnerID
+		b += 1
 	}
 
 	buf[b] = uint8(ec)

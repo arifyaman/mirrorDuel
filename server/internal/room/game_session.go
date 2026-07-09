@@ -354,6 +354,7 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 			DirZ:      p.DirZ,
 			Speed:     p.Speed,
 			MaxReach:  p.MaxReach,
+			OwnerID:   uint8(p.PlayerOwner),
 		})
 	}
 

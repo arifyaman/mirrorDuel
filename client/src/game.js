@@ -190,11 +190,13 @@ this.network = new Network(this.networkClient, this);
 
   update(dt) {
     this.physics.simTime += dt;
-    this.physics.updateProjectiles();
     this.physics.updateExplosions();
     this.physics.updateDashTrails();
     this.physics.updateSlashes(dt);
     this.physics.updateHurtBounces(dt);
+    this.physics.updateFireTrail();
+    this.physics.updateFireSparks();
+    this.physics.updateFireImpacts();
     if (this.gameTitle) this.gameTitle.update();
     if (this.scene) {
       this.scene.cameraTargetMid.x = this._cameraTarget.x;
@@ -202,6 +204,9 @@ this.network = new Network(this.networkClient, this);
       this.scene.updateCamera(dt);
       const camPos = this.scene.cameraComponent.entity.getPosition();
       this.physics.updateAllShields(dt, { x: camPos.x, y: camPos.y, z: camPos.z });
+      this.physics.updateProjectiles({ x: camPos.x, y: camPos.y, z: camPos.z });
+    } else {
+      this.physics.updateProjectiles();
     }
     if (this.myCooldown > 0) {
       this.myCooldown = Math.max(0, this.myCooldown - dt);

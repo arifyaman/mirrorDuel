@@ -138,6 +138,241 @@ export function createExplosion(physics, x, y, z, hexColor) {
   physics._explosions.push({ particles, startTime: performance.now(), duration: 1200 });
 }
 
+// ---- Fireball trail / sparks / impact ----
+
+const FIRE_PALETTE = {
+  1: {
+    trailCore: new Color(1, 0.85, 0.5),
+    trailEdge: new Color(1, 0.3, 0.05),
+    sparks: [
+      new Color(1, 0.95, 0.7),
+      new Color(1, 0.55, 0.15),
+      new Color(1, 0.25, 0.05)
+    ]
+  },
+  2: {
+    trailCore: new Color(0.75, 0.9, 1),
+    trailEdge: new Color(0.15, 0.4, 1),
+    sparks: [
+      new Color(0.8, 0.95, 1),
+      new Color(0.3, 0.6, 1),
+      new Color(0.1, 0.35, 1)
+    ]
+  }
+};
+
+function firePalette(ownerId) {
+  return FIRE_PALETTE[ownerId] || FIRE_PALETTE[1];
+}
+
+export function spawnFireTrailSegment(physics, ownerId, x, y, z) {
+  const pal = firePalette(ownerId);
+  const t = Math.random();
+  const color = new Color(
+    pal.trailCore.r + (pal.trailEdge.r - pal.trailCore.r) * t,
+    pal.trailCore.g + (pal.trailEdge.g - pal.trailCore.g) * t,
+    pal.trailCore.b + (pal.trailEdge.b - pal.trailCore.b) * t
+  );
+
+  const seg = new Entity('fireTrail');
+  seg.addComponent('render', { type: 'sphere' });
+  const mat = new StandardMaterial();
+  mat.diffuse = color;
+  mat.emissive = color;
+  mat.emissiveIntensity = 2.5;
+  mat.opacity = 0.55;
+  mat.blendType = BLEND_ADDITIVE;
+  mat.alphaWrite = false;
+  mat.useLighting = false;
+  mat.update();
+  seg.render.material = mat;
+  const scale = 0.09 + Math.random() * 0.05;
+  seg.setLocalScale(scale, scale, scale);
+  seg.setPosition(x + (Math.random() - 0.5) * 0.05, y + (Math.random() - 0.5) * 0.05, z + (Math.random() - 0.5) * 0.05);
+  physics.app.root.addChild(seg);
+
+  physics._fireTrails.push({
+    entity: seg,
+    createdAt: performance.now(),
+    duration: 320 + Math.random() * 120,
+    initialScale: scale,
+    driftX: (Math.random() - 0.5) * 0.15,
+    driftY: 0.1 + Math.random() * 0.15,
+    driftZ: (Math.random() - 0.5) * 0.15
+  });
+}
+
+export function updateFireTrail(physics) {
+  const now = performance.now();
+  for (let i = physics._fireTrails.length - 1; i >= 0; i--) {
+    const t = physics._fireTrails[i];
+    const elapsed = now - t.createdAt;
+    if (elapsed >= t.duration) {
+      if (t.entity.parent) t.entity.parent.removeChild(t.entity);
+      t.entity.destroy();
+      physics._fireTrails.splice(i, 1);
+      continue;
+    }
+    const alpha = 1 - elapsed / t.duration;
+    const mat = t.entity.render.material;
+    mat.opacity = alpha * 0.55;
+    mat.emissiveIntensity = alpha * 2.5;
+    mat.update();
+
+    t.entity.translate(t.driftX * alpha * 0.016, t.driftY * alpha * 0.016, t.driftZ * alpha * 0.016);
+    const s = t.initialScale * (0.3 + alpha * 0.7);
+    t.entity.setLocalScale(s, s, s);
+  }
+}
+
+export function spawnFireSpark(physics, ownerId, x, y, z) {
+  const pal = firePalette(ownerId);
+  const color = pal.sparks[Math.floor(Math.random() * pal.sparks.length)];
+
+  const spark = new Entity('fireSpark');
+  spark.addComponent('render', { type: 'sphere' });
+  const mat = new StandardMaterial();
+  mat.diffuse = color;
+  mat.emissive = color;
+  mat.emissiveIntensity = 3.0;
+  mat.opacity = 1;
+  mat.blendType = BLEND_ADDITIVE;
+  mat.alphaWrite = false;
+  mat.useLighting = false;
+  mat.update();
+  spark.render.material = mat;
+  const scale = 0.025 + Math.random() * 0.045;
+  spark.setLocalScale(scale, scale, scale);
+  spark.setPosition(x, y, z);
+  physics.app.root.addChild(spark);
+
+  const speed = 0.8 + Math.random() * 1.8;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.random() * Math.PI;
+
+  physics._fireSparks.push({
+    entity: spark,
+    initialScale: scale,
+    vx: Math.sin(phi) * Math.cos(theta) * speed,
+    vy: Math.abs(Math.sin(phi) * Math.sin(theta) * speed) + 0.5,
+    vz: Math.cos(phi) * speed,
+    startTime: performance.now(),
+    duration: 220 + Math.random() * 160
+  });
+}
+
+export function updateFireSparks(physics) {
+  const now = performance.now();
+  for (let i = physics._fireSparks.length - 1; i >= 0; i--) {
+    const p = physics._fireSparks[i];
+    const elapsed = now - p.startTime;
+    if (elapsed >= p.duration) {
+      if (p.entity.parent) p.entity.parent.removeChild(p.entity);
+      p.entity.destroy();
+      physics._fireSparks.splice(i, 1);
+      continue;
+    }
+    const decay = 1 - elapsed / p.duration;
+    p.vx *= 0.94;
+    p.vy -= 0.12;
+    p.vz *= 0.94;
+    p.entity.translate(p.vx * 0.016, p.vy * 0.016, p.vz * 0.016);
+    const s = p.initialScale * decay;
+    p.entity.setLocalScale(s, s, s);
+    const mat = p.entity.render.material;
+    mat.opacity = decay;
+    mat.emissiveIntensity = decay * 3.0;
+    mat.update();
+  }
+}
+
+export function spawnFireImpactBurst(physics, ownerId, x, y, z) {
+  const pal = firePalette(ownerId);
+  const count = 9;
+  const particles = [];
+  for (let i = 0; i < count; i++) {
+    const color = pal.sparks[Math.floor(Math.random() * pal.sparks.length)];
+    const e = new Entity('fireImpact');
+    e.addComponent('render', { type: 'sphere' });
+    const mat = new StandardMaterial();
+    mat.diffuse = color;
+    mat.emissive = color;
+    mat.emissiveIntensity = 3.0;
+    mat.opacity = 1;
+    mat.blendType = BLEND_ADDITIVE;
+    mat.alphaWrite = false;
+    mat.useLighting = false;
+    mat.update();
+    e.render.material = mat;
+    const scale = 0.04 + Math.random() * 0.1;
+    e.setLocalScale(scale, scale, scale);
+    e.setPosition(x + (Math.random() - 0.5) * 0.1, y + (Math.random() - 0.5) * 0.1, z + (Math.random() - 0.5) * 0.1);
+    physics.app.root.addChild(e);
+    const speed = 1.0 + Math.random() * 2.2;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+    particles.push({
+      entity: e,
+      initialScale: scale,
+      vx: Math.sin(phi) * Math.cos(theta) * speed,
+      vy: Math.sin(phi) * Math.sin(theta) * speed,
+      vz: Math.cos(phi) * speed
+    });
+  }
+  physics._fireImpacts.push({ particles, startTime: performance.now(), duration: 420 });
+}
+
+export function updateFireImpacts(physics) {
+  const now = performance.now();
+  for (let i = physics._fireImpacts.length - 1; i >= 0; i--) {
+    const imp = physics._fireImpacts[i];
+    const elapsed = now - imp.startTime;
+    if (elapsed >= imp.duration) {
+      for (const p of imp.particles) {
+        if (p.entity.parent) p.entity.parent.removeChild(p.entity);
+        p.entity.destroy();
+      }
+      physics._fireImpacts.splice(i, 1);
+      continue;
+    }
+    const decay = 1 - elapsed / imp.duration;
+    for (const p of imp.particles) {
+      p.vx *= 0.9;
+      p.vy *= 0.9;
+      p.vz *= 0.9;
+      p.entity.translate(p.vx * 0.016, p.vy * 0.016, p.vz * 0.016);
+      const s = p.initialScale * decay;
+      p.entity.setLocalScale(s, s, s);
+      const mat = p.entity.render.material;
+      mat.opacity = decay;
+      mat.emissiveIntensity = decay * 3.0;
+      mat.update();
+    }
+  }
+}
+
+export function clearFireParticles(physics) {
+  for (const t of physics._fireTrails) {
+    if (t.entity.parent) t.entity.parent.removeChild(t.entity);
+    t.entity.destroy();
+  }
+  physics._fireTrails.length = 0;
+
+  for (const p of physics._fireSparks) {
+    if (p.entity.parent) p.entity.parent.removeChild(p.entity);
+    p.entity.destroy();
+  }
+  physics._fireSparks.length = 0;
+
+  for (const imp of physics._fireImpacts) {
+    for (const p of imp.particles) {
+      if (p.entity.parent) p.entity.parent.removeChild(p.entity);
+      p.entity.destroy();
+    }
+  }
+  physics._fireImpacts.length = 0;
+}
+
 export function createDashGhost(physics, playerId, x, y, z, angle) {
   const col = {
     1: { diffuse: new Color(1, 0.2, 0.2), emissive: new Color(1, 0.1, 0.05) },

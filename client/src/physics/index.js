@@ -1,7 +1,7 @@
 import { applyPlayersLogic, destroyPlayerEntity, cleanupPlayerEntities } from './players.js';
 import { applyProjectilesLogic, updateProjectiles, destroyProjectile, cleanupProjectiles } from './projectiles.js';
 import { updateAllShields, shieldHit, destroyShield } from './shields.js';
-import { createExplosion, createDashGhost, spawnCrescentSlash, updateExplosions, updateDashTrails, updateSlashes, updateHurtBounces } from './effects.js';
+import { createExplosion, createDashGhost, spawnCrescentSlash, updateExplosions, updateDashTrails, updateSlashes, updateHurtBounces, updateFireTrail, updateFireSparks, updateFireImpacts } from './effects.js';
 
 const DT = 0.01667;
 
@@ -20,6 +20,9 @@ export class Physics {
     this._playerShields = new Map();
     this._slashes = [];
     this._hurtBounces = new Map();
+    this._fireTrails = [];
+    this._fireSparks = [];
+    this._fireImpacts = [];
     this.app = app;
   }
 
@@ -40,8 +43,20 @@ export class Physics {
     cleanupPlayerEntities(this);
   }
 
-  updateProjectiles() {
-    updateProjectiles(this);
+  updateProjectiles(cameraPos) {
+    updateProjectiles(this, cameraPos);
+  }
+
+  updateFireTrail() {
+    updateFireTrail(this);
+  }
+
+  updateFireSparks() {
+    updateFireSparks(this);
+  }
+
+  updateFireImpacts() {
+    updateFireImpacts(this);
   }
 
   updateExplosions() {

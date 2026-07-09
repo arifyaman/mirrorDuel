@@ -65,7 +65,8 @@ const players = [];
     const dirZ = dv.getFloat32(off, true); off += 4;
     const speed = dv.getFloat32(off, true); off += 4;
     const maxReach = dv.getFloat32(off, true); off += 4;
-    projectiles.push({ id, spawnTick, startX, y, startZ, dirX, dirZ, speed, maxReach });
+    const ownerId = dv.getUint8(off); off += 1;
+    projectiles.push({ id, spawnTick, startX, y, startZ, dirX, dirZ, speed, maxReach, ownerId });
   }
 
   // Parse events section
