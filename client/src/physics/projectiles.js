@@ -83,7 +83,7 @@ function createGlowingProjectile(physics, id) {
   // Intense point light for projectile glow
   const lightEntity = new Entity('projLight' + id);
   lightEntity.addComponent('light', {
-    type: 'point',
+    type: 'omni',
     color: new Color(0.3, 1.0, 1.0),
     intensity: 5,
     range: 0.8,

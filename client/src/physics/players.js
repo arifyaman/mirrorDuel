@@ -5,15 +5,15 @@ import { cleanupProjectiles } from './projectiles.js';
 
 export function applyPlayersLogic(physics, players) {
   const colors = {
-    1: { diffuse: new Color(1, 0.2, 0.2), emissive: new Color(1, 0.1, 0.05), light: new Color(1, 0.3, 0.2) },
-    2: { diffuse: new Color(0.2, 0.2, 1), emissive: new Color(0.05, 0.05, 1), light: new Color(0.2, 0.3, 1) }
+    1: { diffuse: new Color(1, 0.2, 0.2), emissive: new Color(1, 0.1, 0.05), light: new Color(1, 0.3, 0.2), lightIntensity: 3.0 },
+    2: { diffuse: new Color(0.2, 0.2, 1), emissive: new Color(0.05, 0.05, 1), light: new Color(0.2, 0.3, 1), lightIntensity: 5.0 }
   };
 
   for (const p of players) {
     let entity = physics.playerEntities.get(p.id);
     if (!entity) {
       const col = colors[p.id] || { diffuse: new Color(0.5, 0.5, 0.5), emissive: new Color(0.2, 0.2, 0.2), light: new Color(0.5, 0.5, 0.5) };
-      entity = createGlowingPlayer(physics, p.id, col.diffuse, col.emissive, col.light);
+      entity = createGlowingPlayer(physics, p.id, col.diffuse, col.emissive, col.light, col.lightIntensity);
       entity.enabled = false;
     }
 
@@ -141,7 +141,7 @@ export function cleanupPlayerEntities(physics) {
   cleanupProjectiles(physics);
 }
 
-function createGlowingPlayer(physics, id, color, emissiveColor, lightColor) {
+function createGlowingPlayer(physics, id, color, emissiveColor, lightColor, lightIntensity) {
   const entity = new Entity('player' + id);
   entity.addComponent('render', { type: 'box' });
   const material = new StandardMaterial();
@@ -203,9 +203,9 @@ function createGlowingPlayer(physics, id, color, emissiveColor, lightColor) {
   // Real point light that illuminates the floor
   const lightEntity = new Entity('pointLight' + id);
   lightEntity.addComponent('light', {
-    type: 'point',
+    type: 'omni',
     color: lightColor,
-    intensity: 3.0,
+    intensity: lightIntensity || 3.0,
     range: 6,
     shadow: false
   });

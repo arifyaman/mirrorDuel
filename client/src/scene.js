@@ -13,7 +13,6 @@ export class Scene {
     this.cameraTargetMid = { x: 0, y: 0, z: 0 };
     this.createFloor();
     this.createCamera();
-    this.createLight();
     this.createBoundaryWalls();
     this.setupPostProcessing();
   }
@@ -124,39 +123,11 @@ updateCamera(dt) {
     this._playerPositions = positions;
   }
 
-  createLight() {
-    // Ambient fill
-    const ambientLight = new Entity('ambient');
-    ambientLight.addComponent('light', {
-      type: 'ambient',
-      color: new Color(0.25, 0.25, 0.35),
-      intensity: 1.0,
-      skyColor: new Color(0.15, 0.15, 0.25),
-      groundColor: new Color(0.08, 0.08, 0.12)
-    });
-    this.app.root.addChild(ambientLight);
 
-    // Directional light
-    const directionalLight = new Entity('sun');
-    directionalLight.addComponent('light', {
-      type: 'directional',
-      color: new Color(0.9, 0.9, 1.0),
-      intensity: 2.5,
-      castShadows: true,
-      shadowBias: 0.3,
-      normalOffsetBias: 0.02,
-      shadowResolution: 2048,
-      shadowDistance: 30,
-      shadowType: 'pc.SHADOW_SOFT'
-    });
-    this.app.root.addChild(directionalLight);
-    directionalLight.setEulerAngles(45, -30, 0);
-    directionalLight.setPosition(5, 10, 5);
-  }
 
   createBoundaryWalls() {
     const wallMat = new StandardMaterial();
-    wallMat.diffuse = new Color(0.6, 0.0, 0.0);
+    wallMat.diffuse = new Color(0.4, 0.4, 0.4);
     wallMat.emissive = new Color(0.3, 0.0, 0.0);
     wallMat.emissiveIntensity = 0.3;
     wallMat.alphaWrite = false;

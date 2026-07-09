@@ -70,7 +70,7 @@ func Default() *Config {
 		Projectile: ProjectileConfig{
 			Cooldown:      3,
 			Speed:         13.5,
-			MaxReach:      8,
+			MaxReach:      13,
 			Damage:        20,
 			MaxParticles:  18,
 			BurstSpeed:    8,
