@@ -322,6 +322,21 @@ export class UI {
     this.flashOverlay.style.opacity = '0';
   }
 
+  showDeathLabel(isMe) {
+    const label = document.createElement('div');
+    label.textContent = isMe ? 'GOT SHIT ON!' : 'WINNER!';
+    label.style.cssText = `
+      position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+      font-family:'Impact','Arial Black',sans-serif;font-size:72px;font-weight:900;
+      letter-spacing:4px;text-transform:uppercase;pointer-events:none;z-index:200;
+      color:${isMe ? '#ff2244' : '#00ff88'};
+      text-shadow:0 0 20px ${isMe ? '#ff2244' : '#00ff88'}, 0 0 40px ${isMe ? '#ff2244' : '#00ff88'};
+      opacity:0;transition:opacity 0.3s ease-in;
+    `;
+    document.body.appendChild(label);
+    requestAnimationFrame(() => { label.style.opacity = '1'; });
+  }
+
   destroy() {
     for (const [, bar] of this.healthBarEntities) {
       if (bar.bg.parent) bar.bg.parent.removeChild(bar.bg);

@@ -122,6 +122,7 @@ this.network = new Network(this.networkClient, this);
         if (p.health <= 0 && prev > 0) {
           const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
           this.physics.createExplosion(p.x, p.y, p.z, explosionColor);
+          this.ui.showDeathLabel(isMe);
           console.log(`[DEATH] ${who} died!`);
         }
       }
