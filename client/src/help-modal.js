@@ -55,8 +55,9 @@ function ensureStyles() {
 }
 
 export class HelpModal {
-  constructor() {
+  constructor(audio) {
     ensureStyles();
+    this.audio = audio;
     this.isOpen = false;
     this._createButton();
     this._createModal();
@@ -258,11 +259,13 @@ export class HelpModal {
     // force reflow so the transition triggers
     void this.backdrop.offsetHeight;
     this.backdrop.classList.add('visible');
+    if (this.audio) this.audio.playUiClick();
   }
 
   close() {
     this.isOpen = false;
     this.backdrop.classList.remove('visible');
+    if (this.audio) this.audio.playUiClick();
     setTimeout(() => {
       if (!this.isOpen) this.backdrop.style.display = 'none';
     }, 200);

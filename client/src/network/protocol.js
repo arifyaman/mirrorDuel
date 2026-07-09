@@ -8,6 +8,7 @@ export const MSG_DISCONNECT = 255;
 // Game event sub-types embedded in STATE_SNAPSHOT
 export const EVENT_SLASH = 1;
 export const EVENT_PERFECT_BLOCK = 2;
+export const EVENT_SHIELD_BLOCK = 3;
 
 export const INPUT_SIZE = 13;
 
@@ -82,6 +83,12 @@ const players = [];
         const angle = dv.getFloat32(off, true); off += 4;
         events.push({ type: eventType, playerId, x, z, angle });
       } else if (eventType === EVENT_PERFECT_BLOCK) {
+        const playerId = dv.getUint8(off); off += 1;
+        const x = dv.getFloat32(off, true); off += 4;
+        const z = dv.getFloat32(off, true); off += 4;
+        const angle = dv.getFloat32(off, true); off += 4;
+        events.push({ type: eventType, playerId, x, z, angle });
+      } else if (eventType === EVENT_SHIELD_BLOCK) {
         const playerId = dv.getUint8(off); off += 1;
         const x = dv.getFloat32(off, true); off += 4;
         const z = dv.getFloat32(off, true); off += 4;

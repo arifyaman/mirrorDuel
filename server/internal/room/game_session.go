@@ -170,6 +170,10 @@ func (s *GameSession) TickStep() {
 					if dot >= float32(math.Cos(50*math.Pi/180)) {
 						log.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield (cone)",
 							p.ID, p.PlayerOwner, player.ID)
+						s.pendingEvents = append(s.pendingEvents, GameEvent{
+							Type:    network.EventShieldBlock,
+							Payload: network.EncodeShieldBlockPayload(uint8(player.ID), player.X, player.Z, player.Angle),
+						})
 						// Perfect block: fire free projectile if within timing window
 						cfg := s.Config.Shield
 						elapsed := float32(s.tick-player.ShieldActivatedTick) * 0.01667

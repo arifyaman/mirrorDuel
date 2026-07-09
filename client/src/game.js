@@ -17,10 +17,13 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { GameTitle } from './game-title.js';
 import { HelpModal } from './help-modal.js';
+import { AudioEngine } from './audio.js';
+import { AudioButton } from './audio-button.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
 const COOLDOWN_MAX = 3;
+const PITCH_BY_PLAYER = { 1: 1.0, 2: 0.92 };
 
 export class Game {
   constructor() {
@@ -42,6 +45,7 @@ export class Game {
     window.addEventListener('resize', () => this.app.resizeCanvas());
     this.app.automaticallyManageScenes = false;
 
+    this.audio = new AudioEngine(this.app);
     this.scene = new Scene(this.app);
     const serverUrl = import.meta.env.VITE_SERVER_URL || 'localhost:4433';
     this.networkClient = new NetworkClient(serverUrl);
@@ -54,13 +58,14 @@ this.network = new Network(this.networkClient, this);
     this.myDashCooldown = 0;
     this.myShieldCooldown = 0;
     this.mySlashCooldown = 0;
-    this._prevMyCooldown = 0;
+    this._prevCooldowns = {};
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
     this._myPlayerAngle = 0;
     this._cameraTarget = { x: 0, z: 0 };
     this.gameTitle = new GameTitle();
-    this.helpModal = new HelpModal();
+    this.helpModal = new HelpModal(this.audio);
+    this.audioButton = new AudioButton(this.audio);
     this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
   }
 
@@ -104,11 +109,22 @@ this.network = new Network(this.networkClient, this);
       this._myPlayerAngle = myPlayer.angle;
     }
 
-    // Detect spell fire: cooldown jumps from 0 to >0
-    if (myPlayer && this._prevMyCooldown <= 0 && myPlayer.cooldown > 0) {
-      if (this.gameTitle) this.gameTitle.triggerJump();
+    // Detect skill activations: cooldown jumps from 0 to >0, for every player
+    for (const p of players) {
+      const prev = this._prevCooldowns[p.id] || { fire: 0, dash: 0, shield: 0 };
+      const pitchMult = PITCH_BY_PLAYER[p.id] || 1;
+      if (prev.fire <= 0 && p.cooldown > 0) {
+        this.audio.playFire(pitchMult);
+        if (p.id === this.network.myPlayerId && this.gameTitle) this.gameTitle.triggerJump();
+      }
+      if (prev.dash <= 0 && p.dashCooldown > 0) {
+        this.audio.playDash(pitchMult);
+      }
+      if (prev.shield <= 0 && p.shieldCooldown > 0) {
+        this.audio.playShieldActivate(pitchMult);
+      }
+      this._prevCooldowns[p.id] = { fire: p.cooldown, dash: p.dashCooldown, shield: p.shieldCooldown };
     }
-    this._prevMyCooldown = this.myCooldown;
 
     // Detect hits: health drop on any player
     for (const p of players) {
@@ -120,11 +136,13 @@ this.network = new Network(this.networkClient, this);
         console.log(`[CLIENT HIT] ${who} took ${dmg} damage (${p.health} HP remaining)`);
         this.physics.flashPlayer(p.id);
         this.physics.bouncePlayer(p.id);
+        this.audio.playHit(isMe);
         if (isMe) this.ui.showHitIndicator();
         if (p.health <= 0 && prev > 0) {
           const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
           this.physics.createExplosion(p.x, p.y, p.z, explosionColor);
           this.ui.showDeathLabel(isMe);
+          this.audio.playDeath();
           console.log(`[DEATH] ${who} died!`);
         }
       }
@@ -162,6 +180,8 @@ this.network = new Network(this.networkClient, this);
           this.onSlashEvent(evt.playerId, evt.x, evt.z, evt.angle);
         } else if (evt.type === 2) { // EVENT_PERFECT_BLOCK
           this.onPerfectBlockEvent(evt.playerId, evt.x, evt.z, evt.angle);
+        } else if (evt.type === 3) { // EVENT_SHIELD_BLOCK
+          this.onShieldBlockEvent(evt.playerId, evt.x, evt.z, evt.angle);
         }
       }
     }
@@ -182,10 +202,16 @@ this.network = new Network(this.networkClient, this);
       facingAngle: angle,
       coreColor: playerId === 1 ? [1, 0.2, 0.2] : [0.2, 0.2, 1]
     });
+    this.audio.playSlash(PITCH_BY_PLAYER[playerId] || 1);
   }
 
   onPerfectBlockEvent(playerId, x, z, angle) {
     this.physics.perfectBlockFlash(playerId, x, z);
+    this.audio.playPerfectBlock(PITCH_BY_PLAYER[playerId] || 1);
+  }
+
+  onShieldBlockEvent(playerId, x, z, angle) {
+    this.audio.playShieldBlock(PITCH_BY_PLAYER[playerId] || 1);
   }
 
   update(dt) {
