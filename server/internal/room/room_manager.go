@@ -13,6 +13,7 @@ type SessionIface interface {
 	PlayerID() int
 	SendSnapshot(data []byte)
 	SendRoomCreated(data []byte)
+	SendPong(data []byte)
 	SendDisconnect()
 }
 
@@ -51,6 +52,9 @@ func (m *RoomManager) HandleMessage(session SessionIface, msg *network.SessionMe
 		m.handleJoinRoom(session, msg.Payload)
 	case network.MSGPlayerInput:
 		m.handlePlayerInput(session, msg.Payload)
+	case network.MSGPing:
+		// Pure echo for client-side RTT measurement — no room/session state involved.
+		session.SendPong(msg.Payload)
 	}
 }
 

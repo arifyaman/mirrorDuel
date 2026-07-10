@@ -262,5 +262,19 @@ this.network = new Network(this.networkClient, this);
       if (this.input.inputSlash) flags |= 0x08;
     }
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
+    this.updatePingDisplay();
+  }
+
+  updatePingDisplay() {
+    const pingEl = document.getElementById('ping');
+    if (!pingEl) return;
+    const ping = this.networkClient.ping;
+    if (this.networkClient.state !== 'connected' || ping === null) {
+      pingEl.textContent = '--';
+      pingEl.style.color = '#888';
+      return;
+    }
+    pingEl.textContent = `${Math.round(ping)}ms`;
+    pingEl.style.color = ping <= 60 ? '#0f0' : ping <= 120 ? '#ff0' : '#f00';
   }
 }

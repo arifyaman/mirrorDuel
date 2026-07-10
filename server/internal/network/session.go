@@ -91,6 +91,11 @@ func (s *Session) SendRoomCreated(data []byte) {
 	s.SendMsg(MSGRoomCreated, data)
 }
 
+// SendPong echoes back a PING payload unchanged, for client-side RTT measurement.
+func (s *Session) SendPong(data []byte) {
+	s.SendMsg(MSGPong, data)
+}
+
 // SendDisconnect sends a DISCONNECT message.
 func (s *Session) SendDisconnect() {
 	s.SendMsg(MSGDisconnect, nil)

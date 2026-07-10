@@ -20,6 +20,17 @@
             z-index: 200;
             text-align: center;
         }
+        #ping {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: monospace;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 200;
+            text-align: right;
+        }
         #cooldown-container {
             position: fixed;
             bottom: 20px;
@@ -53,6 +64,7 @@
 </head>
 <body>
     <div id="status">Disconnected</div>
+    <div id="ping">--</div>
     <script type="module">
 import { Game } from './src/game.js';
 const game = new Game();

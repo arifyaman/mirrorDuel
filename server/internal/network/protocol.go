@@ -9,8 +9,10 @@ import (
 const (
 	MSGJoinRoom      = 1
 	MSGPlayerInput   = 2
+	MSGPing          = 3
 	MSGStateSnapshot = 16
 	MSGRoomCreated   = 17
+	MSGPong          = 18
 	MSGDisconnect    = 255
 
 	InputSize = 13

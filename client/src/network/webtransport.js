@@ -1,4 +1,4 @@
-import { encodeJoinRoom, encodePlayerInput, MSG_JOIN_ROOM, MSG_PLAYER_INPUT, MSG_STATE_SNAPSHOT, MSG_ROOM_CREATED, MSG_DISCONNECT, decodeStateSnapshot, decodeRoomCreated, EVENT_SLASH } from './protocol.js';
+import { encodeJoinRoom, encodePlayerInput, encodePing, decodePong, MSG_JOIN_ROOM, MSG_PLAYER_INPUT, MSG_PING, MSG_STATE_SNAPSHOT, MSG_ROOM_CREATED, MSG_PONG, MSG_DISCONNECT, decodeStateSnapshot, decodeRoomCreated, EVENT_SLASH } from './protocol.js';
 
 export class NetworkClient {
   constructor(serverUrl = 'localhost:4433') {
@@ -16,12 +16,15 @@ export class NetworkClient {
     this.reconnectTimer = null;
     this.inputQueue = [];
     this.sendTimer = 0;
+    this.ping = null;
+    this.pingTimer = 0;
     // Read buffer for length-prefixed framing
     this._readBuf = new Uint8Array();
   }
 
   setStatus(state) {
     this.state = state;
+    if (state !== 'connected') this.ping = null;
     if (this.statusHandler) this.statusHandler(state);
   }
 
@@ -48,6 +51,8 @@ export class NetworkClient {
       const name = nickname || 'Player' + Math.floor(Math.random() * 1000);
       await this.sendJoin(name);
       this.setStatus('connected');
+      this.pingTimer = 0;
+      this.sendPing();
     } catch (err) {
       console.error('[WT] Connection error:', err.message);
       if (this.state === 'connected') {
@@ -91,6 +96,9 @@ export class NetworkClient {
               break;
             case MSG_ROOM_CREATED:
               this.handleRoomCreated(payload);
+              break;
+            case MSG_PONG:
+              this.handlePong(payload);
               break;
             case MSG_DISCONNECT:
               this.setStatus('disconnected');
@@ -137,6 +145,31 @@ export class NetworkClient {
     await this.writer.write(msg);
   }
 
+  async sendPing() {
+    if (!this.writer || this.state !== 'connected') return;
+    const data = encodePing(performance.now());
+    const msg = new Uint8Array(5 + data.length);
+    const fullLen = 1 + data.length;
+    msg[0] = (fullLen >> 24) & 0xff;
+    msg[1] = (fullLen >> 16) & 0xff;
+    msg[2] = (fullLen >> 8) & 0xff;
+    msg[3] = fullLen & 0xff;
+    msg[4] = MSG_PING;
+    msg.set(data, 5);
+    try {
+      await this.writer.write(msg);
+    } catch (err) {
+      console.error('[WT] Ping write error:', err);
+    }
+  }
+
+  handlePong(payload) {
+    const sentAt = decodePong(payload);
+    if (sentAt !== null) {
+      this.ping = performance.now() - sentAt;
+    }
+  }
+
   handleSnapshot(payload) {
     const snapshot = decodeStateSnapshot(payload);
     if (snapshot && this.snapHandler) {
@@ -159,6 +192,11 @@ export class NetworkClient {
     if (this.sendTimer >= 0.016) {
       this.sendTimer = 0;
       this.flushInputs();
+    }
+    this.pingTimer += dt;
+    if (this.pingTimer >= 1.0) {
+      this.pingTimer = 0;
+      this.sendPing();
     }
   }
 

@@ -1,8 +1,10 @@
 // Message types (must match server)
 export const MSG_JOIN_ROOM = 1;
 export const MSG_PLAYER_INPUT = 2;
+export const MSG_PING = 3;
 export const MSG_STATE_SNAPSHOT = 16;
 export const MSG_ROOM_CREATED = 17;
+export const MSG_PONG = 18;
 export const MSG_DISCONNECT = 255;
 
 // Game event sub-types embedded in STATE_SNAPSHOT
@@ -18,6 +20,22 @@ export function encodeJoinRoom(name) {
   buf[0] = raw.length;
   buf.set(raw, 1);
   return buf;
+}
+
+// PING payload is just the client's own local timestamp (performance.now()),
+// echoed back unchanged by the server as PONG. RTT is measured purely with
+// the client's own clock, so no client/server clock sync is needed.
+export function encodePing(timestamp) {
+  const buf = new Uint8Array(8);
+  const dv = new DataView(buf.buffer);
+  dv.setFloat64(0, timestamp, true);
+  return buf;
+}
+
+export function decodePong(data) {
+  if (data.length < 8) return null;
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return dv.getFloat64(0, true);
 }
 
 export function encodePlayerInput(tick, moveX, moveZ, mouseX, mouseY, flags) {
