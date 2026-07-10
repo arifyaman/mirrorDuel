@@ -13,6 +13,7 @@ export class Scene {
     this.cameraTargetMid = { x: 0, y: 0, z: 0 };
     this.createFloor();
     this.createCamera();
+    this.createLighting();
     this.createBoundaryWalls();
     this.createObstacles();
     this.setupPostProcessing();
@@ -90,6 +91,27 @@ export class Scene {
     this.app.root.addChild(camera);
     camera.setPosition(this.cameraOffset.x, this.cameraOffset.y, this.cameraOffset.z);
     camera.lookAt(new Vec3(0, 0, 0));
+  }
+
+  createLighting() {
+    // Directional light (sun) — primary illumination + shadows for the arena
+    const sun = new Entity('sun');
+    sun.addComponent('light', {
+      type: 'directional',
+      color: new Color(0.9, 0.9, 1.0),
+      intensity: 2.5,
+      castShadows: true,
+      shadowResolution: 2048,
+      shadowDistance: 30,
+      shadowBias: 0.05,
+      normalOffsetBias: 0.05
+    });
+    sun.setEulerAngles(55, 30, 0);
+    this.app.root.addChild(sun);
+    this.sunLight = sun;
+
+    // Ambient fill so unlit faces aren't pure black
+    this.app.scene.ambientLight = new Color(0.15, 0.16, 0.2);
   }
 
 updateCamera(dt) {
