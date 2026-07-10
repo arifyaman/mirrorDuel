@@ -147,7 +147,7 @@ export class NetworkClient {
   handleRoomCreated(payload) {
     const result = decodeRoomCreated(payload);
     if (result && this.joinHandler) {
-      this.joinHandler(result.roomId, result.myPlayerId, result.opponentName);
+      this.joinHandler(result.roomId, result.myPlayerId, result.opponentName, result.obstacleGrid, result.gridWidth, result.gridHeight);
     }
   }
 

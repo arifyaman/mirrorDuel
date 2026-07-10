@@ -179,14 +179,24 @@ func EncodeStateSnapshot(tick uint16, players []PlayerSnapshot, projectiles []Pr
 	return buf
 }
 
-// EncodeRoomCreated produces: [roomId: u16][myPlayerId: u8][nameLen: u8][name: bytes]
-func EncodeRoomCreated(roomID uint16, myPlayerID uint8, opponentName string) []byte {
-	size := 4 + len(opponentName)
+// EncodeRoomCreated produces:
+// [roomId: u16][myPlayerId: u8][nameLen: u8][name: bytes][gridWidth: u8][gridHeight: u8][bitmask: bytes]
+// The obstacle grid fields are appended after the name so older parsers
+// that only read the first 4+nameLen bytes remain unaffected.
+func EncodeRoomCreated(roomID uint16, myPlayerID uint8, opponentName string, gridWidth, gridHeight uint8, bitmask []byte) []byte {
+	size := 4 + len(opponentName) + 2 + len(bitmask)
 	buf := make([]byte, size)
 	binary.LittleEndian.PutUint16(buf[0:2], roomID)
 	buf[2] = myPlayerID
 	buf[3] = uint8(len(opponentName))
-	copy(buf[4:], opponentName)
+	b := 4
+	copy(buf[b:], opponentName)
+	b += len(opponentName)
+	buf[b] = gridWidth
+	b++
+	buf[b] = gridHeight
+	b++
+	copy(buf[b:], bitmask)
 	return buf
 }
 

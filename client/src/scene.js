@@ -11,11 +11,11 @@ export class Scene {
     this.cameraFollowFactor = 0.4;
     this._playerPositions = [];
     this.cameraTargetMid = { x: 0, y: 0, z: 0 };
+    this.obstacleEntities = [];
     this.createFloor();
     this.createCamera();
     this.createLighting();
     this.createBoundaryWalls();
-    this.createObstacles();
     this.setupPostProcessing();
   }
 
@@ -99,7 +99,7 @@ export class Scene {
     sun.addComponent('light', {
       type: 'directional',
       color: new Color(0.9, 0.9, 1.0),
-      intensity: 2.5,
+      intensity: .8,
       castShadows: true,
       shadowResolution: 2048,
       shadowDistance: 30,
@@ -188,10 +188,20 @@ updateCamera(dt) {
     });
   }
 
-  // Static "0"-shaped blocking cubes — 3-wide x 5-tall pixel-font pattern,
-  // hollow in the middle, centered at the world origin. Must mirror
-  // defaultObstacles() in server/internal/config/config.go exactly.
-  createObstacles() {
+  // Static blocking cubes, driven by the obstacle grid received from the
+  // server in ROOM_CREATED (parsed from the server's PNG map file). Each
+  // `true` cell in the row-major grid becomes a 1x1 blocking cube, using
+  // the same half-integer tile-center formula as the server's
+  // BuildObstaclesFromGrid() in server/internal/config/map.go:
+  //   x = col - width/2 + 0.5, z = row - height/2 + 0.5
+  // Safe to call more than once (e.g. on reconnect) — previous obstacle
+  // entities are destroyed first.
+  createObstacles(grid, width, height) {
+    this.obstacleEntities.forEach((e) => e.destroy());
+    this.obstacleEntities = [];
+
+    if (!grid || !width || !height) return;
+
     const obstacleMat = new StandardMaterial();
     obstacleMat.diffuse = new Color(0.35, 0.35, 0.38);
     obstacleMat.roughness = 0.85;
@@ -200,17 +210,19 @@ updateCamera(dt) {
     obstacleMat.receiveShadows = true;
     obstacleMat.update();
 
-    const cols = [-1, 0, 1];
-    const rows = [-2, -1, 0, 1, 2];
     const cubeSize = 1;
     const cubeHeight = 1;
     const y = -0.5 + cubeHeight / 2;
+    const halfW = width / 2;
+    const halfH = height / 2;
 
     let index = 0;
-    rows.forEach((z) => {
-      cols.forEach((x) => {
-        // Hollow out the middle column for the 3 middle rows.
-        if (x === 0 && z !== -2 && z !== 2) return;
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        if (!grid[row * width + col]) continue;
+
+        const x = col - halfW + 0.5;
+        const z = row - halfH + 0.5;
 
         const cube = new Entity('obstacle' + index++);
         const render = cube.addComponent('render', { type: 'box' });
@@ -219,8 +231,9 @@ updateCamera(dt) {
         render.material = obstacleMat.clone();
         render.material.update();
         this.app.root.addChild(cube);
-      });
-    });
+        this.obstacleEntities.push(cube);
+      }
+    }
   }
 
   setupPostProcessing() {

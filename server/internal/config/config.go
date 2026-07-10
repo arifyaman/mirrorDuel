@@ -18,7 +18,10 @@ type Config struct {
 	Dash          DashConfig
 	Shield        ShieldConfig
 	Slash         SlashConfig
-	Obstacles     []Obstacle
+	Obstacles          []Obstacle
+	ObstacleGridWidth  int
+	ObstacleGridHeight int
+	ObstacleBitmask    []byte
 }
 
 // Obstacle is a static axis-aligned blocking cube on the floor.
@@ -64,8 +67,13 @@ type SlashConfig struct {
 	ConeAngle  float32 // degrees
 }
 
-// Default returns the default game configuration.
+// Default returns the default game configuration. The obstacle map starts
+// out empty here — main.go loads the real layout from a PNG map file at
+// startup (see LoadObstacleMap) and overwrites Obstacles/ObstacleBitmask
+// before the room manager is created. Keeping Default() itself free of
+// file I/O means Config is always valid even if that load is skipped.
 func Default() *Config {
+	emptyGrid := EmptyObstacleGrid(DefaultMapWidth, DefaultMapHeight)
 	return &Config{
 		QUICPort:    4433,
 		HTTPPort:    8081,
@@ -103,40 +111,9 @@ func Default() *Config {
 			HitRadius:  0.95,
 			ConeAngle:  85,
 		},
-		Obstacles: defaultObstacles(),
+		Obstacles:          BuildObstaclesFromGrid(emptyGrid, DefaultMapWidth, DefaultMapHeight),
+		ObstacleGridWidth:  DefaultMapWidth,
+		ObstacleGridHeight: DefaultMapHeight,
+		ObstacleBitmask:    PackObstacleBitmask(emptyGrid, DefaultMapWidth, DefaultMapHeight),
 	}
-}
-
-// defaultObstacles builds a "0"-shaped arrangement of 1x1 blocking cubes,
-// centered at the world origin, in a 3-wide x 5-tall pixel-font pattern:
-//
-//	X X X
-//	X . X
-//	X . X
-//	X . X
-//	X X X
-//
-// Spans x:[-1.5,1.5], z:[-2.5,2.5] — clear of both player spawn points
-// (x=-2 and x=2).
-func defaultObstacles() []Obstacle {
-	const half = 0.5
-	cols := []float32{-1, 0, 1}
-	rows := []float32{-2, -1, 0, 1, 2}
-
-	var obstacles []Obstacle
-	for _, z := range rows {
-		for _, x := range cols {
-			// Hollow out the middle column for the 3 middle rows.
-			if x == 0 && z != -2 && z != 2 {
-				continue
-			}
-			obstacles = append(obstacles, Obstacle{
-				X:         x,
-				Z:         z,
-				HalfWidth: half,
-				HalfDepth: half,
-			})
-		}
-	}
-	return obstacles
 }

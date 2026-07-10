@@ -102,11 +102,32 @@ const players = [];
 }
 
 export function decodeRoomCreated(data) {
-  if (data.length < 3) return null;
+  if (data.length < 4) return null;
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const roomId = dv.getUint16(0, true);
   const myPlayerId = dv.getUint8(2);
   const nameLen = dv.getUint8(3);
-  const opponentName = new TextDecoder().decode(data.slice(4, 4 + nameLen));
-  return { roomId, myPlayerId, opponentName };
+  let off = 4;
+  const opponentName = new TextDecoder().decode(data.slice(off, off + nameLen));
+  off += nameLen;
+
+  // Obstacle grid, appended after the name (may be absent on older servers).
+  let obstacleGrid = null;
+  let gridWidth = 0;
+  let gridHeight = 0;
+  if (off + 2 <= data.length) {
+    gridWidth = dv.getUint8(off); off += 1;
+    gridHeight = dv.getUint8(off); off += 1;
+    const bitmaskLen = Math.ceil((gridWidth * gridHeight) / 8);
+    if (off + bitmaskLen <= data.length) {
+      const bitmask = data.slice(off, off + bitmaskLen);
+      obstacleGrid = new Array(gridWidth * gridHeight);
+      for (let i = 0; i < obstacleGrid.length; i++) {
+        obstacleGrid[i] = (bitmask[i >> 3] & (1 << (i & 7))) !== 0;
+      }
+      off += bitmaskLen;
+    }
+  }
+
+  return { roomId, myPlayerId, opponentName, gridWidth, gridHeight, obstacleGrid };
 }

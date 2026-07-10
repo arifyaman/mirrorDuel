@@ -74,8 +74,11 @@ this.network = new Network(this.networkClient, this);
     this.networkClient.connect();
     this.networkClient.onStatus(state => this.onStatus(state));
     this.networkClient.onDisconnect(() => this.network.onDisconnect());
-    this.networkClient.onJoin((roomId, myPlayerId) => {
+    this.networkClient.onJoin((roomId, myPlayerId, opponentName, obstacleGrid, gridWidth, gridHeight) => {
       this.network.onJoin(myPlayerId);
+      if (obstacleGrid) {
+        this.scene.createObstacles(obstacleGrid, gridWidth, gridHeight);
+      }
     });
     this.networkClient.onSnap((tick, players, projectiles, events) => this.onSnap(tick, players, projectiles, events));
 

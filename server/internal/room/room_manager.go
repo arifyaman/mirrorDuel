@@ -66,7 +66,14 @@ func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 		return
 	}
 
-	roomCreated := network.EncodeRoomCreated(result.RoomID, uint8(result.PlayerID), result.OpponentName)
+	roomCreated := network.EncodeRoomCreated(
+		result.RoomID,
+		uint8(result.PlayerID),
+		result.OpponentName,
+		uint8(m.Config.ObstacleGridWidth),
+		uint8(m.Config.ObstacleGridHeight),
+		m.Config.ObstacleBitmask,
+	)
 	session.SendRoomCreated(roomCreated)
 
 	// Also send current snapshot to both players in the room

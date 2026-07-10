@@ -98,6 +98,7 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Player**: Red/Blue box (0.5 scale) at y=-0.20
 - **Forward Indicator**: Green strip on player showing forward direction
 - **Boundary Walls**: Semi-transparent red walls at arena edges
+- **Obstacles**: Solid gray 1x1x1 blocking cubes, server-driven from a 20x20 PNG map file (see Map System below); block both player movement and projectiles
 - **Lighting**:
   - Directional light (sun): white (0.9, 0.9, 1.0), intensity 2.5, 2048 shadow resolution, 30 unit distance
   - Point lights per player and projectile for glow effects
@@ -105,6 +106,14 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Camera**: Follows player midpoint (2+ players) or single player with 0.4 lerp factor
   - Dynamic zoom: pulls back when players are >10 units apart
   - LookAt fixed at origin, camera offset `{x:0, y:10, z:16}` with scaled distance
+
+### Map System
+- **Source of truth**: Server loads a 20x20 PNG file at startup (`MAP_FILE` env var, default `assets/map.png`, relative to the server's working directory) — white pixels are empty floor tiles, black (or any pixel with luminance < 50%) are blocking tiles. Fully transparent pixels are always treated as empty.
+- **Tile grid**: Each pixel is a 1x1 world-unit tile; the 20x20 grid is centered on the origin, so tile centers land on half-integer coordinates (`x = col - 9.5`, `z = row - 9.5`).
+- **Server collision**: Blocking tiles become `config.Obstacle{X, Z, HalfWidth: 0.5, HalfDepth: 0.5}` entries, resolved against player movement/knockback/dash targets (`resolveObstacles()` in `types.go`) and destroy projectiles on contact (`game_session.go`). Slash attacks do not currently check obstacles.
+- **Client sync**: The server never assumes the client has its own copy of the map — it packs the boolean grid into a bitmask and sends it once per player, appended to the `ROOM_CREATED` message. The client unpacks it and renders matching 1x1 blocking cubes (`Scene.createObstacles()` in `scene.js`), using the identical tile-center formula.
+- **Fallback**: If the map file is missing, unreadable, or not exactly 20x20, the server logs a warning and starts with an empty arena instead of crashing.
+- **Default map**: `server/assets/map.png` ships a large "0"-shaped ring (rows 5–14, cols 6–13 outline) enclosing both spawn points, comfortably clear of both spawn positions (x=-2 and x=2).
 
 ## Project Structure
 
@@ -132,6 +141,7 @@ mirrorDuel/
     │   ├── room/               # GameSession, Player, projectile logic, matchmaking
     │   ├── network/            # Session, length-prefixed binary protocol encode/decode
     │   └── config/             # Server configuration (FloorSize:20, Speed:13.5, MaxReach:8)
+    ├── assets/                 # map.png — 20x20 obstacle map (source of truth for the arena layout)
     └── tls/                    # Self-signed TLS certificates for WebTransport
 ```
 
@@ -216,7 +226,14 @@ mirrorDuel/
 - **Dash**: Cooldown(7), Distance(4), Duration(0.333), EaseOutStart(0.2)
 - **Shield**: Cooldown(7), ActiveDuration(1), PerfectBlockWindow(0.3)
 - **Slash**: Cooldown(0.5), Damage(4.2), HitRadius(0.95), ConeAngle(85)
+- **Obstacles**: `Obstacles []Obstacle`, `ObstacleGridWidth/Height`, `ObstacleBitmask []byte` — populated at startup from the PNG map file (see `internal/config/map.go`); `Default()` itself stays file-I/O-free and starts with an empty grid
 - **All durations in seconds** (no tick-based values)
+
+### `internal/config/map.go`
+- **LoadObstacleMap(path)**: Reads + decodes a PNG, validates it's exactly 20x20, converts to a row-major `[]bool` blocking-tile grid via luminance thresholding
+- **BuildObstaclesFromGrid()**: Converts the grid to `[]Obstacle` cubes at half-integer tile centers
+- **PackObstacleBitmask()**: Bit-packs the grid (LSB-first) for compact network transmission
+- **EmptyObstacleGrid()**: Safety-net fallback when the map file is missing/invalid/wrong size
 
 ## Network Protocol
 
@@ -239,7 +256,7 @@ mirrorDuel/
 | Type | Name | Size | Format |
 |------|------|------|--------|
 | 16 | STATE_SNAPSHOT | variable | `[tick: u16][playerCount: u8][players...][projCount: u8][projectiles...][eventCount: u8][events...]` |
-| 17 | ROOM_CREATED | variable | `[roomId: u16][myPlayerId: u8][opponentNameLen: u8][name: bytes]` |
+| 17 | ROOM_CREATED | variable | `[roomId: u16][myPlayerId: u8][opponentNameLen: u8][name: bytes][gridWidth: u8][gridHeight: u8][obstacleBitmask: bytes]` |
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
@@ -248,6 +265,9 @@ mirrorDuel/
 - **Event**: `[eventType: u8][payload: varies]` — event sub-types: EVENT_SLASH(1) = `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes), EVENT_PERFECT_BLOCK(2) = `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes)
 
 ## Git & Deployment
+
+### Commit Policy
+AI agents must **never** run `git commit` unless explicitly asked by the user. Never assume a commit is wanted just because a task or feature is complete — always wait for the user to request it (e.g. "commit", "commit this").
 
 ### Push Policy
 AI agents must **never** `git push` after committing unless explicitly asked by the user. Commits are staged and committed locally; pushing requires user instruction.
@@ -315,6 +335,7 @@ Set these via environment variables or copy to `.env`:
 | `HTTP_PORT` | `8081` | HTTP health check port |
 | `CERT_FILE` | `tls/localhost.pem` | TLS certificate path |
 | `KEY_FILE` | `tls/localhost-key.pem` | TLS private key path |
+| `MAP_FILE` | `assets/map.png` | 20x20 obstacle map PNG (relative to server working directory) |
 
 Run with custom config:
 ```bash

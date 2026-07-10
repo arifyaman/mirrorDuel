@@ -159,6 +159,20 @@ func main() {
 		}
 	}
 
+	mapFile := os.Getenv("MAP_FILE")
+	if mapFile == "" {
+		mapFile = "assets/map.png"
+	}
+	if grid, w, h, err := config.LoadObstacleMap(mapFile); err != nil {
+		log.Printf("[Map] Warning: could not load obstacle map %q: %v — starting with empty arena", mapFile, err)
+	} else {
+		cfg.ObstacleGridWidth = w
+		cfg.ObstacleGridHeight = h
+		cfg.Obstacles = config.BuildObstaclesFromGrid(grid, w, h)
+		cfg.ObstacleBitmask = config.PackObstacleBitmask(grid, w, h)
+		log.Printf("[Map] Loaded obstacle map %q (%dx%d, %d blocking tiles)", mapFile, w, h, len(cfg.Obstacles))
+	}
+
 	certFile := os.Getenv("CERT_FILE")
 	if certFile == "" {
 		certFile = "tls/localhost.pem"
