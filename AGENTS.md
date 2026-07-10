@@ -91,6 +91,7 @@ A 3D arena-style 1v1 multiplayer game built with PlayCanvas (client) and Go WebT
 - **Cooldown Display**: Animated ring (per-skill max values [3, 7, 7, 0.5]), text shows time remaining or skill name when available
 - **Key Labels**: R/Space/F/M shown above each skill icon
 - **Health Bars**: 3D world-space bars above each player, hidden when dead
+- **Ping Indicator**: Top-right corner text showing round-trip latency (`"{ms}ms"`), color-coded green (≤60ms) / yellow (61-120ms) / red (>120ms), `"--"` while disconnected
 
 ### Scene Elements
 - **Floor**: Gray box (20x0.05x20) at y=-0.5, diffuse color (0.12, 0.12, 0.18)
@@ -159,6 +160,7 @@ mirrorDuel/
 - **Length-Prefixed Framing**: `[length: u32 LE][msgType: u8][payload]`
 - **Read Buffer**: Accumulates data across reads, parses complete messages (handles coalesced/partial reads)
 - **Input Queue**: Batches frames, sends every 16ms
+- **Ping/Latency**: Sends a PING (client's own `performance.now()` timestamp) immediately on connect and every ~1s thereafter; RTT computed from the echoed PONG using only the client's own clock (no clock sync needed), exposed as `this.ping`; reset to `null` on disconnect/reconnecting
 - **Auto-reconnect**: 2-second retry on disconnect
 
 ### `src/input.js`
@@ -173,7 +175,7 @@ mirrorDuel/
 - **Binary Decoding**: `decodeStateSnapshot()` - variable length, players + projectiles + events
   - Player: 37 bytes (1 u8 + 9 f32) — includes shieldCooldown, slashCooldown
   - Events: `[eventCount: u8][events...]` — each event: `[eventType: u8][payload: varies]`
-- **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), STATE_SNAPSHOT(16), ROOM_CREATED(17), DISCONNECT(255)
+- **Message Types**: JOIN_ROOM(1), PLAYER_INPUT(2), PING(3), STATE_SNAPSHOT(16), ROOM_CREATED(17), PONG(18), DISCONNECT(255)
 - **Event Types**: EVENT_SLASH(1) — `[playerId: u8][x: f32][z: f32][angle: f32]` (13 bytes)
 
 ### Entity System
@@ -206,6 +208,7 @@ mirrorDuel/
 - **Matchmaking**: Joins existing room (<2 players) or creates new one
 - **Player ID**: Picks first free slot from {1, 2} (not `len+1`), so either player leaving and rejoining works correctly
 - **Input Processing**: Queues inputs, triggers skill activation
+- **Ping**: `MSGPing` is handled directly in `HandleMessage` — the payload is echoed straight back via `session.SendPong()`, no room/session state involved
 - **Broadcast**: Sends STATE_SNAPSHOT every tick to all players in room; events (slash VFX, etc.) are embedded in the snapshot
 - **Disconnect**: Removes player from room, keeps room open for replacement (only deletes empty rooms)
 
@@ -249,6 +252,7 @@ mirrorDuel/
 |------|------|------|--------|
 | 1 | JOIN_ROOM | variable | `[nameLen: 1][name: bytes]` |
 | 2 | PLAYER_INPUT | 13 | `[tick: u16][moveX: i8][moveZ: i8][mouseX: f32][mouseY: f32][flags: u8]` |
+| 3 | PING | 8 | `[timestamp: f64]` — client's own `performance.now()`, echoed back unchanged |
 
 `flags`: `0x01` = fire, `0x02` = dash, `0x04` = shield, `0x08` = slash
 
@@ -257,6 +261,7 @@ mirrorDuel/
 |------|------|------|--------|
 | 16 | STATE_SNAPSHOT | variable | `[tick: u16][playerCount: u8][players...][projCount: u8][projectiles...][eventCount: u8][events...]` |
 | 17 | ROOM_CREATED | variable | `[roomId: u16][myPlayerId: u8][opponentNameLen: u8][name: bytes][gridWidth: u8][gridHeight: u8][obstacleBitmask: bytes]` |
+| 18 | PONG | 8 | `[timestamp: f64]` — same payload echoed back from PING, unchanged |
 | 255 | DISCONNECT | 0 | (empty) |
 
 ### StateSnapshot Details
