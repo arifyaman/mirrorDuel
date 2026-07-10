@@ -51,9 +51,13 @@ export class Input {
 
   onMouseMove(e) {
     const rect = this._canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const screenX = (e.clientX - rect.left) * dpr;
-    const screenY = (e.clientY - rect.top) * dpr;
+    // canvas.width/height always track CSS pixel size in this app (PlayCanvas
+    // clamps its internal pixel ratio to 1 since maxPixelRatio is never set),
+    // so screen coordinates must stay in plain CSS pixels too — no
+    // devicePixelRatio scaling here, or aiming breaks on HiDPI displays
+    // (e.g. Mac Retina) and at non-100% browser zoom.
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
     const canvasW = this._canvas.width;
     const canvasH = this._canvas.height;
 
