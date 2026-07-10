@@ -14,6 +14,7 @@ export class Scene {
     this.createFloor();
     this.createCamera();
     this.createBoundaryWalls();
+    this.createObstacles();
     this.setupPostProcessing();
   }
 
@@ -162,6 +163,41 @@ updateCamera(dt) {
       render.material = wallMat.clone();
       render.material.update();
       this.app.root.addChild(wall);
+    });
+  }
+
+  // Static "0"-shaped blocking cubes — 3-wide x 5-tall pixel-font pattern,
+  // hollow in the middle, centered at the world origin. Must mirror
+  // defaultObstacles() in server/internal/config/config.go exactly.
+  createObstacles() {
+    const obstacleMat = new StandardMaterial();
+    obstacleMat.diffuse = new Color(0.35, 0.35, 0.38);
+    obstacleMat.roughness = 0.85;
+    obstacleMat.metalness = 0.05;
+    obstacleMat.castShadows = true;
+    obstacleMat.receiveShadows = true;
+    obstacleMat.update();
+
+    const cols = [-1, 0, 1];
+    const rows = [-2, -1, 0, 1, 2];
+    const cubeSize = 1;
+    const cubeHeight = 1;
+    const y = -0.5 + cubeHeight / 2;
+
+    let index = 0;
+    rows.forEach((z) => {
+      cols.forEach((x) => {
+        // Hollow out the middle column for the 3 middle rows.
+        if (x === 0 && z !== -2 && z !== 2) return;
+
+        const cube = new Entity('obstacle' + index++);
+        const render = cube.addComponent('render', { type: 'box' });
+        cube.setLocalScale(cubeSize, cubeHeight, cubeSize);
+        cube.setPosition(x, y, z);
+        render.material = obstacleMat.clone();
+        render.material.update();
+        this.app.root.addChild(cube);
+      });
     });
   }
 

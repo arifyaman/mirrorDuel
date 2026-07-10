@@ -7,6 +7,58 @@ import (
 	"mirror-duel-server-go/internal/network"
 )
 
+// playerCollisionRadius approximates the player's half-extent for
+// obstacle collision (player render box is 0.5 scale).
+const playerCollisionRadius = 0.3
+
+// resolveObstacles pushes a point (x, z) out of any obstacle AABB it
+// penetrates (inflated by radius), moving it out along the axis of
+// least penetration. Returns the corrected x, z.
+func resolveObstacles(x, z, radius float32, obstacles []config.Obstacle) (float32, float32) {
+	for _, o := range obstacles {
+		minX := o.X - o.HalfWidth - radius
+		maxX := o.X + o.HalfWidth + radius
+		minZ := o.Z - o.HalfDepth - radius
+		maxZ := o.Z + o.HalfDepth + radius
+
+		if x <= minX || x >= maxX || z <= minZ || z >= maxZ {
+			continue
+		}
+
+		penLeft := x - minX
+		penRight := maxX - x
+		penBottom := z - minZ
+		penTop := maxZ - z
+
+		minPen := penLeft
+		axis := 0 // 0=left, 1=right, 2=bottom, 3=top
+		if penRight < minPen {
+			minPen = penRight
+			axis = 1
+		}
+		if penBottom < minPen {
+			minPen = penBottom
+			axis = 2
+		}
+		if penTop < minPen {
+			minPen = penTop
+			axis = 3
+		}
+
+		switch axis {
+		case 0:
+			x = minX
+		case 1:
+			x = maxX
+		case 2:
+			z = minZ
+		case 3:
+			z = maxZ
+		}
+	}
+	return x, z
+}
+
 // Projectile holds spawn data for a projectile.
 type Projectile struct {
 	ID          int
@@ -198,6 +250,8 @@ func (p *Player) processMovementTarget(last *network.PlayerInput, dt float32) {
 	} else if p.TargetZ > halfFloor {
 		p.TargetZ = halfFloor
 	}
+
+	p.TargetX, p.TargetZ = resolveObstacles(p.TargetX, p.TargetZ, playerCollisionRadius, p.Config.Obstacles)
 }
 
 func (p *Player) applyLerp(dt float32) {
@@ -237,6 +291,9 @@ func (p *Player) applyKnockback(dirX, dirZ float32, magnitude float32) {
 	} else if p.Z > halfFloor {
 		p.Z = halfFloor
 	}
+
+	p.TargetX, p.TargetZ = resolveObstacles(p.TargetX, p.TargetZ, playerCollisionRadius, p.Config.Obstacles)
+	p.X, p.Z = resolveObstacles(p.X, p.Z, playerCollisionRadius, p.Config.Obstacles)
 }
 
 func (p *Player) healSkill(amount float32) {
@@ -293,6 +350,8 @@ func (p *Player) startDash() {
 	} else if p.DashTargetZ > halfFloor {
 		p.DashTargetZ = halfFloor
 	}
+
+	p.DashTargetX, p.DashTargetZ = resolveObstacles(p.DashTargetX, p.DashTargetZ, playerCollisionRadius, p.Config.Obstacles)
 }
 
 func (p *Player) processDash(dt float32) {

@@ -151,6 +151,18 @@ func (s *GameSession) TickStep() {
 		px := p.StartX + p.DirX*traveled
 		pz := p.StartZ + p.DirZ*traveled
 
+		// Destroy projectile on contact with a blocking obstacle cube
+		blockedByObstacle := false
+		for _, o := range s.Config.Obstacles {
+			if px >= o.X-o.HalfWidth && px <= o.X+o.HalfWidth && pz >= o.Z-o.HalfDepth && pz <= o.Z+o.HalfDepth {
+				blockedByObstacle = true
+				break
+			}
+		}
+		if blockedByObstacle {
+			continue
+		}
+
 		hit := false
 		for _, player := range s.Players {
 			if player.ID == p.PlayerOwner || player.Health <= 0 {
