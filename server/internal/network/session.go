@@ -2,19 +2,47 @@ package network
 
 import (
 	"log"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/quic-go/webtransport-go"
 )
 
+const (
+	// sendQueueSize bounds how many outbound messages can be buffered per
+	// session before newer ones are dropped. At 60Hz, ~64 covers roughly a
+	// second of snapshots — plenty for jitter/high latency, small enough
+	// that a truly stalled connection can't grow memory unboundedly.
+	sendQueueSize = 64
+
+	// writeTimeout bounds how long a single stream write may block. Without
+	// this, a stalled/lossy connection's Write() call can block forever
+	// (QUIC flow-control has no built-in timeout), which — since sends are
+	// dispatched from a per-session goroutine — would otherwise leak that
+	// goroutine forever instead of detecting the dead connection.
+	writeTimeout = 3 * time.Second
+
+	// readTimeout bounds how long the read loop waits for any data (input,
+	// pings, etc.) before considering the connection dead. This reaps
+	// sessions whose connection stalled without a clean QUIC close.
+	readTimeout = 30 * time.Second
+)
+
 // Session wraps a WebTransport session and provides the room.Session interface.
 type Session struct {
-	id        string
-	conn      *webtransport.Session
-	stream    *webtransport.Stream
-	connected bool
-	playerID  int
+	id       string
+	conn     *webtransport.Session
+	stream   *webtransport.Stream
+	playerID int
+
+	connected atomic.Bool
 
 	onMessage func(msg *SessionMessage)
+
+	sendQueue chan []byte
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewSession creates a new Session.
@@ -23,9 +51,12 @@ func NewSession(id string, conn *webtransport.Session, stream *webtransport.Stre
 		id:        id,
 		conn:      conn,
 		stream:    stream,
-		connected: true,
+		sendQueue: make(chan []byte, sendQueueSize),
+		done:      make(chan struct{}),
 	}
+	s.connected.Store(true)
 	go s.readLoop()
+	go s.writeLoop()
 	return s
 }
 
@@ -49,6 +80,14 @@ func (s *Session) SetMessageHandler(fn func(msg *SessionMessage)) {
 	s.onMessage = fn
 }
 
+// Close stops this session's write loop and marks it disconnected. Safe to
+// call multiple times (e.g. on read error and again during external
+// cleanup).
+func (s *Session) Close() {
+	s.connected.Store(false)
+	s.closeOnce.Do(func() { close(s.done) })
+}
+
 // encodeFrame wraps data into a length-prefixed frame:
 // [length: u32 LE][msgType: u8][payload: bytes]
 // The length field covers msgType + payload.
@@ -66,18 +105,40 @@ func encodeFrame(msgType uint8, data []byte) []byte {
 	return buf
 }
 
-// SendMsg prepends a message type byte and writes to the QUIC stream.
+// SendMsg prepends a message type byte and enqueues it for the session's
+// write loop. This never blocks the caller (e.g. the shared 60Hz tick-loop
+// goroutine broadcasting to every room) — if the per-session send queue is
+// full (connection stalled/falling behind), the message is dropped instead
+// of piling up or blocking.
 func (s *Session) SendMsg(msgType uint8, data []byte) {
-	if !s.connected {
+	if !s.connected.Load() {
 		return
 	}
 
 	full := encodeFrame(msgType, data)
 
-	_, err := s.stream.Write(full)
-	if err != nil {
-		log.Printf("[Session] Write error for %s: %v", s.id, err)
-		s.connected = false
+	select {
+	case s.sendQueue <- full:
+	default:
+		log.Printf("[Session] %s send queue full, dropping message type %d", s.id, msgType)
+	}
+}
+
+// writeLoop drains the send queue and performs the actual (potentially
+// slow/blocking) stream writes on its own per-session goroutine, isolated
+// from the shared tick loop and from every other session.
+func (s *Session) writeLoop() {
+	for {
+		select {
+		case full := <-s.sendQueue:
+			s.stream.SetWriteDeadline(time.Now().Add(writeTimeout))
+			if _, err := s.stream.Write(full); err != nil {
+				log.Printf("[Session] Write error for %s: %v", s.id, err)
+				s.Close()
+			}
+		case <-s.done:
+			return
+		}
 	}
 }
 
@@ -99,19 +160,22 @@ func (s *Session) SendPong(data []byte) {
 // SendDisconnect sends a DISCONNECT message.
 func (s *Session) SendDisconnect() {
 	s.SendMsg(MSGDisconnect, nil)
-	s.connected = false
+	s.connected.Store(false)
 }
 
 // readLoop reads from the QUIC stream and dispatches messages via the callback.
 // It handles partial reads and coalesced reads using length-prefixed framing.
 func (s *Session) readLoop() {
-	for s.connected {
+	defer s.Close()
+
+	for s.connected.Load() {
+		s.stream.SetReadDeadline(time.Now().Add(readTimeout))
+
 		// Read into a temporary buffer
 		tmp := make([]byte, 4096)
 		n, err := s.stream.Read(tmp)
 		if err != nil {
 			log.Printf("[Session] %s stream read error: %v (n=%d)", s.id, err, n)
-			s.connected = false
 			return
 		}
 

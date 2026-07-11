@@ -115,6 +115,7 @@ func (h *wtHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sess.SendDisconnect()
 		h.reg.Remove(id)
 		h.rm.HandleDisconnect(sess)
+		sess.Close()
 
 		if h.rm.Callbacks.OnSessionDisconnect != nil {
 			h.rm.Callbacks.OnSessionDisconnect(sess)
