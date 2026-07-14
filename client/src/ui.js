@@ -1,12 +1,16 @@
-import { Color, Entity, StandardMaterial } from 'playcanvas';
+import { Color, Entity, StandardMaterial, Vec3 } from 'playcanvas';
+
+const PLAYER_NAME_COLORS = { 1: '#ff4444', 2: '#4488ff' };
 
 export class UI {
-  constructor(app, circumference, max) {
+  constructor(app, circumference, max, cameraComponent) {
     this.app = app;
     this.circumference = circumference;
     this.max = max;
+    this.cameraComponent = cameraComponent;
     this.maxPerSkill = [3, 7, 7];
     this.healthBarEntities = new Map();
+    this.nameLabelEls = new Map();
     this.slashBarEntities = new Map();
     this.fireBar = null;
     this.shieldBar = null;
@@ -18,11 +22,63 @@ export class UI {
     this._createFlashOverlay();
   }
 
-  update(players, cooldowns, maxPerSkill, myPlayerId) {
+  update(players, cooldowns, maxPerSkill, myPlayerId, names) {
     this._updateHealthBars(players);
+    this._updateNameLabels(players, names);
     this._updateSkillCooldownBars(players, myPlayerId);
     this._updateSlashCooldownBars(players, myPlayerId);
     this._updateCooldowns(cooldowns, maxPerSkill);
+  }
+
+  _updateNameLabels(players, names) {
+    if (!this.cameraComponent || !this.cameraComponent.camera) return;
+    const camera = this.cameraComponent.camera;
+    const canvas = this.app.graphicsDevice.canvas;
+    const activeIds = new Set();
+    const worldPos = new Vec3();
+    const screenPos = new Vec3();
+
+    for (const p of players) {
+      activeIds.add(p.id);
+      let el = this.nameLabelEls.get(p.id);
+      if (!el) {
+        el = document.createElement('div');
+        el.style.cssText = `
+          position: fixed;
+          transform: translate(-50%, -100%);
+          font-family: 'Courier New', monospace;
+          font-size: 13px;
+          font-weight: bold;
+          text-shadow: 0 0 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7);
+          pointer-events: none;
+          z-index: 140;
+          white-space: nowrap;
+        `;
+        document.body.appendChild(el);
+        this.nameLabelEls.set(p.id, el);
+      }
+
+      const dead = p.health <= 0;
+      if (dead) {
+        el.style.display = 'none';
+        continue;
+      }
+
+      worldPos.set(p.x, p.y + 1.6, p.z);
+      camera.worldToScreen(worldPos, canvas.width, canvas.height, screenPos);
+      el.style.display = 'block';
+      el.style.left = `${screenPos.x}px`;
+      el.style.top = `${screenPos.y}px`;
+      el.style.color = PLAYER_NAME_COLORS[p.id] || '#fff';
+      el.textContent = (names && names[p.id]) || ('P' + p.id);
+    }
+
+    for (const [id, el] of this.nameLabelEls) {
+      if (!activeIds.has(id)) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        this.nameLabelEls.delete(id);
+      }
+    }
   }
 
   _updateHealthBars(players) {
@@ -419,6 +475,10 @@ export class UI {
       bar.fill.destroy();
     }
     this.healthBarEntities.clear();
+    for (const [, el] of this.nameLabelEls) {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }
+    this.nameLabelEls.clear();
     for (const [, bar] of this.slashBarEntities) {
       if (bar.parent) bar.parent.removeChild(bar);
       bar.destroy();

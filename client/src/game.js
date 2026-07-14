@@ -17,6 +17,7 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { GameTitle } from './game-title.js';
 import { HelpModal } from './help-modal.js';
+import { NicknameModal } from './nickname-modal.js';
 import { AudioEngine } from './audio.js';
 import { AudioButton } from './audio-button.js';
 
@@ -65,17 +66,18 @@ this.network = new Network(this.networkClient, this);
     this._cameraTarget = { x: 0, z: 0 };
     this.gameTitle = new GameTitle();
     this.helpModal = new HelpModal(this.audio);
+    this.nicknameModal = new NicknameModal(this.audio);
+    this.myNickname = null;
     this.audioButton = new AudioButton(this.audio);
-    this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+    this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX, this.scene.cameraComponent);
   }
 
   start() {
     this.app.on('start', () => this._onAppStarted());
-    this.networkClient.connect();
     this.networkClient.onStatus(state => this.onStatus(state));
     this.networkClient.onDisconnect(() => this.network.onDisconnect());
     this.networkClient.onJoin((roomId, myPlayerId, opponentName, obstacleGrid, gridWidth, gridHeight) => {
-      this.network.onJoin(myPlayerId);
+      this.network.onJoin(myPlayerId, opponentName);
       if (obstacleGrid) {
         this.scene.createObstacles(obstacleGrid, gridWidth, gridHeight);
       }
@@ -84,6 +86,11 @@ this.network = new Network(this.networkClient, this);
 
     this.app.on('update', (dt) => this.update(dt));
     this.app.start();
+
+    this.nicknameModal.show((name) => {
+      this.myNickname = name;
+      this.networkClient.connect(name);
+    });
   }
 
   _onAppStarted() {
@@ -174,7 +181,13 @@ this.network = new Network(this.networkClient, this);
     this.scene.setPlayerPositions(players.map(p => ({ x: p.x, z: p.z })));
 
     this.physics.applySnapshot(players, projectiles);
-    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7], this.network.myPlayerId);
+    const names = {};
+    if (this.network.myPlayerId) {
+      names[this.network.myPlayerId] = this.myNickname || 'You';
+      const opponentId = this.network.myPlayerId === 1 ? 2 : 1;
+      if (this.network.opponentName) names[opponentId] = this.network.opponentName;
+    }
+    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7], this.network.myPlayerId, names);
 
     // Process game events from snapshot
     if (events) {
@@ -192,7 +205,7 @@ this.network = new Network(this.networkClient, this);
 
   recreateHUD() {
     this.ui.destroy();
-    this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX);
+    this.ui = new UI(this.app, COOLDOWN_CIRCUMFERENCE, COOLDOWN_MAX, this.scene.cameraComponent);
   }
 
   onSlashEvent(playerId, x, z, angle) {
@@ -251,7 +264,7 @@ this.network = new Network(this.networkClient, this);
     }
     const myId = this.network.myPlayerId;
     const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
-    const paused = this.helpModal && this.helpModal.isOpen;
+    const paused = (this.helpModal && this.helpModal.isOpen) || (this.nicknameModal && this.nicknameModal.isOpen);
     const moveX = dead || paused ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
     const moveZ = dead || paused ? 0 : (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
     let flags = 0;

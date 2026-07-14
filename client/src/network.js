@@ -3,10 +3,12 @@ export class Network {
     this.client = client;
     this.game = game;
     this.myPlayerId = 0;
+    this.opponentName = null;
   }
 
-  onJoin(myPlayerId) {
+  onJoin(myPlayerId, opponentName) {
     this.myPlayerId = myPlayerId;
+    this.opponentName = opponentName || null;
     this.game.ui.clearDeathLabels();
   }
 

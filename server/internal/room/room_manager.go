@@ -2,10 +2,16 @@ package room
 
 import (
 	"log"
+	"strings"
+	"unicode"
 
 	"mirror-duel-server-go/internal/config"
 	"mirror-duel-server-go/internal/network"
 )
+
+// maxNicknameLength bounds player display names (matches the client's
+// <input maxlength="12">).
+const maxNicknameLength = 12
 
 // SessionIface is the interface that both room.Session and network sessions implement.
 type SessionIface interface {
@@ -58,8 +64,32 @@ func (m *RoomManager) HandleMessage(session SessionIface, msg *network.SessionMe
 	}
 }
 
+// sanitizeNickname trims whitespace, strips control characters, and clamps
+// to maxNicknameLength runes (rune-safe, not a raw byte slice) as
+// defense-in-depth. The client already enforces this via <input
+// maxlength="12">, but a modified/malicious client could otherwise send an
+// arbitrary string up to 255 bytes (the wire format's length-prefix limit).
+func sanitizeNickname(name string) string {
+	name = strings.TrimSpace(name)
+
+	var b strings.Builder
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	name = strings.TrimSpace(b.String())
+
+	runes := []rune(name)
+	if len(runes) > maxNicknameLength {
+		runes = runes[:maxNicknameLength]
+	}
+	return string(runes)
+}
+
 func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
-	name := network.DecodeJoinRoom(payload)
+	name := sanitizeNickname(network.DecodeJoinRoom(payload))
 	if name == "" {
 		log.Printf("[Room] Invalid join room payload from %s", session.ID())
 		return
@@ -79,6 +109,31 @@ func (m *RoomManager) handleJoinRoom(session SessionIface, payload []byte) {
 		m.Config.ObstacleBitmask,
 	)
 	session.SendRoomCreated(roomCreated)
+
+	// Notify any already-connected player(s) in the room of the new
+	// opponent's name. ROOM_CREATED is otherwise only ever sent to the
+	// session that is currently joining — without this, whichever player
+	// joined first would never learn a later joiner's name (their own
+	// ROOM_CREATED was already sent before the opponent existed).
+	for _, room := range m.Rooms {
+		if room.RoomID == int(result.RoomID) {
+			for _, p := range room.Players {
+				if p.ID == result.PlayerID || p.Session == nil {
+					continue
+				}
+				otherRoomCreated := network.EncodeRoomCreated(
+					uint16(room.RoomID),
+					uint8(p.ID),
+					name,
+					uint8(m.Config.ObstacleGridWidth),
+					uint8(m.Config.ObstacleGridHeight),
+					m.Config.ObstacleBitmask,
+				)
+				p.Session.SendRoomCreated(otherRoomCreated)
+			}
+			break
+		}
+	}
 
 	// Also send current snapshot to both players in the room
 	for _, room := range m.Rooms {

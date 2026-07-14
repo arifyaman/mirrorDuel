@@ -18,6 +18,9 @@ export class NetworkClient {
     this.sendTimer = 0;
     this.ping = null;
     this.pingTimer = 0;
+    // Remembers the resolved nickname (user-typed or random fallback) so
+    // reconnect() reuses the same name instead of generating a new one.
+    this._nickname = null;
     // Read buffer for length-prefixed framing
     this._readBuf = new Uint8Array();
   }
@@ -48,7 +51,8 @@ export class NetworkClient {
       this.writer = this.stream.writable.getWriter();
 
       this.readLoop();
-      const name = nickname || 'Player' + Math.floor(Math.random() * 1000);
+      const name = nickname || this._nickname || 'Player' + Math.floor(Math.random() * 1000);
+      this._nickname = name;
       await this.sendJoin(name);
       this.setStatus('connected');
       this.pingTimer = 0;
@@ -126,7 +130,7 @@ export class NetworkClient {
     if (this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
-      await this.connect();
+      await this.connect(this._nickname);
     }, 2000);
   }
 
