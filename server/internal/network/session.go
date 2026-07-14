@@ -80,12 +80,26 @@ func (s *Session) SetMessageHandler(fn func(msg *SessionMessage)) {
 	s.onMessage = fn
 }
 
-// Close stops this session's write loop and marks it disconnected. Safe to
-// call multiple times (e.g. on read error and again during external
-// cleanup).
+// Close stops this session's write loop, marks it disconnected, and
+// terminates the underlying WebTransport session. Safe to call multiple
+// times (e.g. on read/write error and again during external cleanup) —
+// the actual teardown only runs once.
+//
+// Actively closing the session (not just the local stream) matters: a
+// stream-level read/write timeout (see readTimeout/writeTimeout) only
+// fails that local call, it does NOT close the underlying connection on
+// its own. Without this, main.go's `<-conn.Context().Done()` would never
+// fire for a stalled-but-not-cleanly-closed client, so the disconnect
+// cleanup (removing the player from their room, room teardown, etc.)
+// would never run and this goroutine/session would leak indefinitely.
 func (s *Session) Close() {
 	s.connected.Store(false)
-	s.closeOnce.Do(func() { close(s.done) })
+	s.closeOnce.Do(func() {
+		close(s.done)
+		if s.conn != nil {
+			_ = s.conn.CloseWithError(0, "session closed")
+		}
+	})
 }
 
 // encodeFrame wraps data into a length-prefixed frame:
