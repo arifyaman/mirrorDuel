@@ -103,7 +103,7 @@ func Default() *Config {
 		Shield: ShieldConfig{
 			Cooldown:           7,
 			ActiveDuration:     1,
-			PerfectBlockWindow: 0.20,
+			PerfectBlockWindow: 0.35,
 		},
 		Slash: SlashConfig{
 			Cooldown:   0.5,
