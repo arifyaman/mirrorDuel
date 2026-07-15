@@ -59,9 +59,51 @@ func (m *RoomManager) HandleMessage(session SessionIface, msg *network.SessionMe
 	case network.MSGPlayerInput:
 		m.handlePlayerInput(session, msg.Payload)
 	case network.MSGPing:
-		// Pure echo for client-side RTT measurement — no room/session state involved.
-		session.SendPong(msg.Payload)
+		m.handlePing(session, msg.Payload)
 	}
+}
+
+// handlePing stores the sender's self-reported RTT (if provided) and replies
+// with a PONG that echoes the original timestamp (for the client's own RTT
+// measurement, unchanged) plus the sender's opponent's last known RTT
+// (-1 if unknown), piggybacked on the same round trip — deliberately not a
+// separate push message or embedded in STATE_SNAPSHOT, since ping only
+// updates ~once/sec (the PING cadence) while snapshots go out at 60Hz.
+func (m *RoomManager) handlePing(session SessionIface, payload []byte) {
+	pingData := network.DecodePing(payload)
+	if pingData == nil {
+		// Malformed/too-short payload — nothing meaningful to embed, but
+		// keep the lenient prior behavior of echoing it back unchanged.
+		session.SendPong(payload)
+		return
+	}
+
+	opponentPing := float32(-1)
+	for _, room := range m.Rooms {
+		var self, opponent *Player
+		for _, player := range room.Players {
+			if player.Session == session {
+				self = player
+			}
+		}
+		if self == nil {
+			continue
+		}
+		if pingData.LastPing >= 0 {
+			self.Ping = pingData.LastPing
+		}
+		for _, player := range room.Players {
+			if player.ID != self.ID {
+				opponent = player
+			}
+		}
+		if opponent != nil {
+			opponentPing = opponent.Ping
+		}
+		break
+	}
+
+	session.SendPong(network.EncodeOpponentPingPong(pingData.Timestamp, opponentPing))
 }
 
 // sanitizeNickname trims whitespace, strips control characters, and clamps

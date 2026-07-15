@@ -166,7 +166,9 @@ func (s *Session) SendRoomCreated(data []byte) {
 	s.SendMsg(MSGRoomCreated, data)
 }
 
-// SendPong echoes back a PING payload unchanged, for client-side RTT measurement.
+// SendPong sends a PONG message with the given pre-encoded payload
+// (typically the echoed PING timestamp plus the opponent's ping, see
+// room.RoomManager.handlePing), for client-side RTT measurement.
 func (s *Session) SendPong(data []byte) {
 	s.SendMsg(MSGPong, data)
 }

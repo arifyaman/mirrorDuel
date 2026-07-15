@@ -22,20 +22,30 @@ export function encodeJoinRoom(name) {
   return buf;
 }
 
-// PING payload is just the client's own local timestamp (performance.now()),
-// echoed back unchanged by the server as PONG. RTT is measured purely with
+// PING payload is the client's own local timestamp (performance.now()),
+// echoed back by the server as part of PONG. RTT is measured purely with
 // the client's own clock, so no client/server clock sync is needed.
-export function encodePing(timestamp) {
-  const buf = new Uint8Array(8);
+// A second field carries the client's own last-measured RTT (ms), which the
+// server stores and later reports back to the *opponent* in their PONG;
+// -1 if not yet known.
+export function encodePing(timestamp, lastPing = -1) {
+  const buf = new Uint8Array(12);
   const dv = new DataView(buf.buffer);
   dv.setFloat64(0, timestamp, true);
+  dv.setFloat32(8, lastPing, true);
   return buf;
 }
 
+// PONG payload: [timestamp: f64][opponentPingMs: f32 (optional)] — timestamp
+// is our own echoed PING send time (for our RTT calc); opponentPingMs (if
+// present) is our opponent's last self-reported RTT, piggybacked on this
+// same round trip instead of a separate message. -1 = opponent ping unknown.
 export function decodePong(data) {
   if (data.length < 8) return null;
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  return dv.getFloat64(0, true);
+  const sentAt = dv.getFloat64(0, true);
+  const opponentPing = data.length >= 12 ? dv.getFloat32(8, true) : null;
+  return { sentAt, opponentPing };
 }
 
 export function encodePlayerInput(tick, moveX, moveZ, mouseX, mouseY, flags) {

@@ -18,6 +18,7 @@ export class NetworkClient {
     this.sendTimer = 0;
     this.ping = null;
     this.pingTimer = 0;
+    this.opponentPing = null;
     // Remembers the resolved nickname (user-typed or random fallback) so
     // reconnect() reuses the same name instead of generating a new one.
     this._nickname = null;
@@ -27,7 +28,10 @@ export class NetworkClient {
 
   setStatus(state) {
     this.state = state;
-    if (state !== 'connected') this.ping = null;
+    if (state !== 'connected') {
+      this.ping = null;
+      this.opponentPing = null;
+    }
     if (this.statusHandler) this.statusHandler(state);
   }
 
@@ -151,7 +155,7 @@ export class NetworkClient {
 
   async sendPing() {
     if (!this.writer || this.state !== 'connected') return;
-    const data = encodePing(performance.now());
+    const data = encodePing(performance.now(), this.ping === null ? -1 : this.ping);
     const msg = new Uint8Array(5 + data.length);
     const fullLen = 1 + data.length;
     msg[0] = (fullLen >> 24) & 0xff;
@@ -168,9 +172,13 @@ export class NetworkClient {
   }
 
   handlePong(payload) {
-    const sentAt = decodePong(payload);
-    if (sentAt !== null) {
-      this.ping = performance.now() - sentAt;
+    const result = decodePong(payload);
+    if (!result) return;
+    this.ping = performance.now() - result.sentAt;
+    // opponentPing is null if the server didn't include it (older payload);
+    // -1 means "included but not yet known" — either way, treat as unknown.
+    if (result.opponentPing !== null) {
+      this.opponentPing = result.opponentPing >= 0 ? result.opponentPing : null;
     }
   }
 

@@ -44,6 +44,18 @@
             z-index: 200;
             text-align: right;
         }
+        #opponent-ping {
+            position: fixed;
+            top: 40px;
+            right: 20px;
+            color: #fff;
+            font-family: monospace;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 200;
+            text-align: right;
+            opacity: 0.8;
+        }
         #cooldown-container {
             position: fixed;
             bottom: 20px;
@@ -78,6 +90,7 @@
 <body>
     <div id="status">Disconnected</div>
     <div id="ping">--</div>
+    <div id="opponent-ping"></div>
     <script type="module">
 import { Game } from './src/game.js';
 const game = new Game();

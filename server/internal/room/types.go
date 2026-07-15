@@ -115,6 +115,11 @@ type Player struct {
 	SlashActive      bool
 	SlashActiveTime  float32
 	JustSlashed      bool
+
+	// Ping is this player's last self-reported RTT in ms (from their own
+	// PING payload), -1 if unknown. Relayed to the opponent for display,
+	// not part of the STATE_SNAPSHOT wire format.
+	Ping float32
 }
 
 // NewPlayer creates a new Player.
@@ -129,6 +134,7 @@ func NewPlayer(id int, name string, x, y, z float32, cfg *config.Config) *Player
 		TargetX:   x,
 		TargetZ:   z,
 		Config:    cfg,
+		Ping:      -1,
 	}
 }
 

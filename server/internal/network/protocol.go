@@ -232,7 +232,45 @@ func EncodeShieldBlockPayload(playerId uint8, x, z, angle float32) []byte {
 	return buf
 }
 
+// EncodeOpponentPingPong produces an extended PONG payload:
+// [timestamp: f64][opponentPingMs: f32] (12 bytes). timestamp is the
+// original client-sent PING timestamp (echoed back unchanged, as before,
+// for the client's own RTT measurement); opponentPingMs is the recipient's
+// opponent's last self-reported RTT (-1 if unknown), piggybacked on the
+// existing PING/PONG round trip instead of a separate push message.
+func EncodeOpponentPingPong(timestamp float64, opponentPingMs float32) []byte {
+	buf := make([]byte, 12)
+	binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(timestamp))
+	binary.LittleEndian.PutUint32(buf[8:12], math.Float32bits(opponentPingMs))
+	return buf
+}
+
 // ---- DECODING ----
+
+// PingData is the decoded payload of a client PING message.
+type PingData struct {
+	Timestamp float64
+	// LastPing is the client's own last-measured RTT in ms (self-reported,
+	// via its own PING/PONG round trip), or -1 if unknown/not yet measured.
+	// Only present on newer clients — payloads shorter than 12 bytes yield
+	// LastPing = -1.
+	LastPing float32
+}
+
+// DecodePing parses a PING payload: [timestamp: f64][lastPing: f32 (optional)]
+func DecodePing(data []byte) *PingData {
+	if len(data) < 8 {
+		return nil
+	}
+	result := &PingData{
+		Timestamp: math.Float64frombits(binary.LittleEndian.Uint64(data[0:8])),
+		LastPing:  -1,
+	}
+	if len(data) >= 12 {
+		result.LastPing = math.Float32frombits(binary.LittleEndian.Uint32(data[8:12]))
+	}
+	return result
+}
 
 // DecodePlayerInput parses a 13-byte input payload. Returns nil if too short.
 func DecodePlayerInput(data []byte) *PlayerInput {

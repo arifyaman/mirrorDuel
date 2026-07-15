@@ -280,14 +280,26 @@ this.network = new Network(this.networkClient, this);
 
   updatePingDisplay() {
     const pingEl = document.getElementById('ping');
-    if (!pingEl) return;
-    const ping = this.networkClient.ping;
-    if (this.networkClient.state !== 'connected' || ping === null) {
-      pingEl.textContent = '--';
-      pingEl.style.color = '#888';
-      return;
+    if (pingEl) {
+      const ping = this.networkClient.ping;
+      if (this.networkClient.state !== 'connected' || ping === null) {
+        pingEl.textContent = '--';
+        pingEl.style.color = '#888';
+      } else {
+        pingEl.textContent = `${Math.round(ping)}ms`;
+        pingEl.style.color = ping <= 60 ? '#0f0' : ping <= 120 ? '#ff0' : '#f00';
+      }
     }
-    pingEl.textContent = `${Math.round(ping)}ms`;
-    pingEl.style.color = ping <= 60 ? '#0f0' : ping <= 120 ? '#ff0' : '#f00';
+
+    const oppPingEl = document.getElementById('opponent-ping');
+    if (oppPingEl) {
+      const oppPing = this.networkClient.opponentPing;
+      if (this.networkClient.state !== 'connected' || oppPing === null) {
+        oppPingEl.textContent = '';
+      } else {
+        oppPingEl.textContent = `opp: ${Math.round(oppPing)}ms`;
+        oppPingEl.style.color = oppPing <= 60 ? '#0f0' : oppPing <= 120 ? '#ff0' : '#f00';
+      }
+    }
   }
 }

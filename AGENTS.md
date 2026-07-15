@@ -277,6 +277,9 @@ AI agents must **never** run `git commit` unless explicitly asked by the user. N
 ### Push Policy
 AI agents must **never** `git push` after committing unless explicitly asked by the user. Commits are staged and committed locally; pushing requires user instruction.
 
+### Running the Server
+AI agents must **never** run/execute the server binary (e.g. `./main`) from the agent's shell/console — building is sufficient (`go build ./cmd/server/`) to verify compilation. Do not start a live server process, even temporarily for testing/smoke-checks. The user runs the server themselves.
+
 ### Pre-Push Hook (`.githooks/pre-push`)
 On `git push`, the pre-push hook automatically runs `server/deploy.sh` which:
 1. Builds the Go server binary (`go build`)
