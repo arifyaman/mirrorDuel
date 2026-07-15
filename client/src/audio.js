@@ -167,8 +167,7 @@ export class AudioEngine {
 
   playSlash(pitchMult = 1) {
     if (!this.ctx) return;
-    this._noiseBurst(0.1, { gain: 0.26, freqStart: 2600 * pitchMult, freqEnd: 700 * pitchMult, q: 0.9, attack: 0.004 });
-    this._tone(260 * pitchMult, 180 * pitchMult, 0.05, { type: 'square', gain: 0.15, attack: 0.002, delay: 0.07 });
+    this._noiseBurst(0.1, { gain: 0.26, freqStart: 3600 * pitchMult, freqEnd: 1000 * pitchMult, q: 0.9, attack: 0.004 });
   }
 
   playHit(isMe) {
