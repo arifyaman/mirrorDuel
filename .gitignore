@@ -3,6 +3,9 @@ dist/
 *.tsbuildinfo
 server/main
 server/bin/
+*.exe
+*.exe~
+*.pem
 
 # Environment files
 .env

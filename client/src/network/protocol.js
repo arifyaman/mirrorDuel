@@ -5,14 +5,27 @@ export const MSG_PING = 3;
 export const MSG_STATE_SNAPSHOT = 16;
 export const MSG_ROOM_CREATED = 17;
 export const MSG_PONG = 18;
+export const MSG_SELECT_PERK = 19;
 export const MSG_DISCONNECT = 255;
 
 // Game event sub-types embedded in STATE_SNAPSHOT
 export const EVENT_SLASH = 1;
 export const EVENT_PERFECT_BLOCK = 2;
 export const EVENT_SHIELD_BLOCK = 3;
+export const EVENT_EXPLOSION = 4;
+export const EVENT_TURRET_FIRE = 5;
+export const EVENT_PLAYER_PERKS = 6;
+export const EVENT_WAVE_UPDATE = 10;
+export const EVENT_SQUAD_WIPED = 11;
 
 export const INPUT_SIZE = 13;
+
+export function encodeSelectPerk(perkId) {
+  const buf = new Uint8Array(2);
+  buf[0] = MSG_SELECT_PERK;
+  buf[1] = perkId;
+  return buf;
+}
 
 export function encodeJoinRoom(name) {
   const raw = new TextEncoder().encode(name);
@@ -122,6 +135,31 @@ const players = [];
         const z = dv.getFloat32(off, true); off += 4;
         const angle = dv.getFloat32(off, true); off += 4;
         events.push({ type: eventType, playerId, x, z, angle });
+      } else if (eventType === EVENT_EXPLOSION) {
+        const x = dv.getFloat32(off, true); off += 4;
+        const z = dv.getFloat32(off, true); off += 4;
+        events.push({ type: eventType, x, z });
+      } else if (eventType === EVENT_TURRET_FIRE) {
+        const tx = dv.getFloat32(off, true); off += 4;
+        const tz = dv.getFloat32(off, true); off += 4;
+        const angle = dv.getFloat32(off, true); off += 4;
+        const zx = dv.getFloat32(off, true); off += 4;
+        const zz = dv.getFloat32(off, true); off += 4;
+        events.push({ type: eventType, tx, tz, angle, zx, zz });
+      } else if (eventType === EVENT_PLAYER_PERKS) {
+        const playerId = dv.getUint8(off); off += 1;
+        const perkMask = dv.getUint8(off); off += 1;
+        events.push({ type: eventType, playerId, perkMask });
+      } else if (eventType === 10) { // EVENT_WAVE_UPDATE
+        const wave = dv.getUint8(off); off += 1;
+        const state = dv.getUint8(off); off += 1;
+        const timeLeft = dv.getUint16(off, true) / 10.0; off += 2;
+        const aliveZombies = dv.getUint8(off); off += 1;
+        const totalKills = dv.getUint16(off, true); off += 2;
+        events.push({ type: eventType, wave, state, timeLeft, aliveZombies, totalKills });
+      } else if (eventType === 11) { // EVENT_SQUAD_WIPED
+        const wave = dv.getUint8(off); off += 1;
+        events.push({ type: eventType, wave });
       }
     }
   }

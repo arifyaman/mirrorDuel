@@ -1,7 +1,6 @@
 package room
 
 import (
-	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -18,12 +17,16 @@ type GameEvent struct {
 
 // GameSession mirrors the TypeScript GameSession (a 1v1 room).
 type GameSession struct {
-	RoomID          int
-	tick            int
-	Config          *config.Config
-	mu              sync.Mutex
-	Players         map[int]*Player
-	Projectiles     []Projectile
+	RoomID        int
+	tick          int
+	Config        *config.Config
+	mu            sync.Mutex
+	Players       map[int]*Player
+	Zombies       map[int]*Zombie
+	Wave          *WaveManager
+	isGameOver    bool
+	gameOverTimer float32
+	Projectiles   []Projectile
 	pendingEvents []GameEvent
 }
 
@@ -35,6 +38,8 @@ func NewGameSession(roomID int, cfg *config.Config) *GameSession {
 		RoomID:  roomID,
 		Config:  cfg,
 		Players: make(map[int]*Player),
+		Zombies: make(map[int]*Zombie),
+		Wave:    NewWaveManager(),
 	}
 }
 
@@ -62,7 +67,6 @@ func (s *GameSession) TickStep() {
 			activatedIDs[player.ID] = activation{skill: skillFire}
 			firedPlayers[player.ID] = player
 			player.JustFired = false
-			player.healSkill(s.Config.SkillHealAmount)
 		}
 		if player.JustDashed {
 			activatedIDs[player.ID] = activation{skill: skillDash}
@@ -112,30 +116,69 @@ func (s *GameSession) TickStep() {
 	// Fire projectiles for players that fired this tick (must be inside lock so projectiles
 	// are captured in the snapshot below)
 	for _, player := range firedPlayers {
-		if player.Cooldown > 0 || player.Health <= 0 {
+		if player.Health <= 0 {
 			continue
 		}
 		cfg := s.Config.Projectile
-		player.Cooldown = cfg.Cooldown
 
 		// Direction from player's facing angle (source of truth), not mouse aim
 		angle := float64(player.Angle)
 		dirX := float32(math.Sin(angle))
 		dirZ := float32(math.Cos(angle))
-		spawnX := player.X + dirX*0.3
-		spawnZ := player.Z + dirZ*0.3
-		s.Projectiles = append(s.Projectiles, Projectile{
-			ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
-			StartX:      spawnX,
-			Y:           player.Y,
-			StartZ:      spawnZ,
-			DirX:        dirX,
-			DirZ:        dirZ,
-			Speed:       cfg.Speed,
-			MaxReach:    cfg.MaxReach,
-			SpawnTick:   s.tick,
-			PlayerOwner: player.ID,
-		})
+
+		if player.HasDualWield {
+			// Perpendicular vector for left and right guns
+			perpX := float32(math.Cos(angle))
+			perpZ := float32(-math.Sin(angle))
+
+			// Right gun projectile
+			rSpawnX := player.X + dirX*0.45 - perpX*0.35
+			rSpawnZ := player.Z + dirZ*0.45 - perpZ*0.35
+			s.Projectiles = append(s.Projectiles, Projectile{
+				ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
+				StartX:      rSpawnX,
+				Y:           player.Y,
+				StartZ:      rSpawnZ,
+				DirX:        dirX,
+				DirZ:        dirZ,
+				Speed:       cfg.Speed,
+				MaxReach:    cfg.MaxReach,
+				SpawnTick:   s.tick,
+				PlayerOwner: player.ID,
+			})
+
+			// Left gun projectile
+			lSpawnX := player.X + dirX*0.45 + perpX*0.35
+			lSpawnZ := player.Z + dirZ*0.45 + perpZ*0.35
+			s.Projectiles = append(s.Projectiles, Projectile{
+				ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
+				StartX:      lSpawnX,
+				Y:           player.Y,
+				StartZ:      lSpawnZ,
+				DirX:        dirX,
+				DirZ:        dirZ,
+				Speed:       cfg.Speed,
+				MaxReach:    cfg.MaxReach,
+				SpawnTick:   s.tick,
+				PlayerOwner: player.ID,
+			})
+		} else {
+			// Single gun projectile
+			spawnX := player.X + dirX*0.35
+			spawnZ := player.Z + dirZ*0.35
+			s.Projectiles = append(s.Projectiles, Projectile{
+				ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
+				StartX:      spawnX,
+				Y:           player.Y,
+				StartZ:      spawnZ,
+				DirX:        dirX,
+				DirZ:        dirZ,
+				Speed:       cfg.Speed,
+				MaxReach:    cfg.MaxReach,
+				SpawnTick:   s.tick,
+				PlayerOwner: player.ID,
+			})
+		}
 	}
 
 	// Update projectiles with collision detection (server-authoritative)
@@ -164,89 +207,75 @@ func (s *GameSession) TickStep() {
 		}
 
 		hit := false
-		for _, player := range s.Players {
-			if player.ID == p.PlayerOwner || player.Health <= 0 {
+
+		// 1. Check projectile collision with Zombies
+		for zID, z := range s.Zombies {
+			if z.Health <= 0 {
 				continue
 			}
-			dx := px - player.X
-			dz := pz - player.Z
+			dx := px - z.X
+			dz := pz - z.Z
 			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
 			if dist < hitRadius {
-				if player.ShieldActive {
-					angle := float64(player.Angle)
-					facingX := float32(math.Sin(angle))
-					facingZ := float32(math.Cos(angle))
-					ndx := dx / dist
-					ndz := dz / dist
-					dot := ndx*facingX + ndz*facingZ
-					if dot >= float32(math.Cos(50*math.Pi/180)) {
-						log.Printf("[BLOCK] projectile %d (player %d) blocked by player %d's shield (cone)",
-							p.ID, p.PlayerOwner, player.ID)
-						s.pendingEvents = append(s.pendingEvents, GameEvent{
-							Type:    network.EventShieldBlock,
-							Payload: network.EncodeShieldBlockPayload(uint8(player.ID), player.X, player.Z, player.Angle),
-						})
-						// Perfect block: fire free projectile if within timing window
-						cfg := s.Config.Shield
-						elapsed := float32(s.tick-player.ShieldActivatedTick) * 0.01667
-						if !player.PerfectBlockUsed && elapsed <= cfg.PerfectBlockWindow {
-							player.PerfectBlockUsed = true
-							pAngle := float64(player.Angle)
-							pDirX := float32(math.Sin(pAngle))
-							pDirZ := float32(math.Cos(pAngle))
-							pSpawnX := player.X + pDirX*0.3
-							pSpawnZ := player.Z + pDirZ*0.3
-							pCfg := s.Config.Projectile
-							alive = append(alive, Projectile{
-								ID:          int(atomic.AddInt32(&projectileIDCounter, 1)),
-								StartX:      pSpawnX,
-								Y:           player.Y,
-								StartZ:      pSpawnZ,
-								DirX:        pDirX,
-								DirZ:        pDirZ,
-								Speed:       pCfg.Speed,
-								MaxReach:    pCfg.MaxReach,
-								SpawnTick:   s.tick,
-								PlayerOwner: player.ID,
-							})
-							s.pendingEvents = append(s.pendingEvents, GameEvent{
-								Type:    network.EventPerfectBlock,
-								Payload: network.EncodePerfectBlockPayload(uint8(player.ID), player.X, player.Z, player.Angle),
-							})
-							log.Printf("[PERFECT BLOCK] player %d triggered perfect block, fired free projectile", player.ID)
+				owner := s.Players[p.PlayerOwner]
+				hasExplosive := owner != nil && owner.HasExplosive
+				hasPiercing := owner != nil && owner.HasPiercing
+
+				z.Health -= s.Config.Projectile.Damage
+				if dist > 0.01 {
+					knx := (z.X - px) / dist
+					knz := (z.Z - pz) / dist
+					z.X += knx * 0.4
+					z.Z += knz * 0.4
+				}
+
+				if z.Health <= 0 {
+					s.Wave.TotalKills++
+					delete(s.Zombies, zID)
+				}
+
+				// Explosive Ammo Perk: AoE explosion dealing 24 damage + radial knockback to all nearby zombies!
+				if hasExplosive {
+					s.pendingEvents = append(s.pendingEvents, GameEvent{
+						Type:    network.EventExplosion,
+						Payload: network.EncodeExplosionPayload(px, pz),
+					})
+					explosionRadius := float32(2.5)
+					for otherZID, otherZ := range s.Zombies {
+						if otherZID == zID || otherZ.Health <= 0 {
+							continue
 						}
-						hit = true
-						break
+						edx := otherZ.X - px
+						edz := otherZ.Z - pz
+						eDist := float32(math.Sqrt(float64(edx*edx + edz*edz)))
+						if eDist <= explosionRadius {
+							otherZ.Health -= 24.0 // High AoE splash damage!
+							if eDist > 0.01 {
+								otherZ.X += (edx / eDist) * 0.75
+								otherZ.Z += (edz / eDist) * 0.75
+							}
+							if otherZ.Health <= 0 {
+								s.Wave.TotalKills++
+								delete(s.Zombies, otherZID)
+							}
+						}
 					}
 				}
-				if player.IsDashing {
-					log.Printf("[DODGE] projectile %d (player %d) dodged by player %d's dash",
-						p.ID, p.PlayerOwner, player.ID)
+
+				if !hasPiercing {
 					hit = true
 					break
 				}
-			player.Health -= s.Config.Projectile.Damage
-			if player.Health < 0 {
-				player.Health = 0
-			}
-			if dist > 0.01 {
-				knx := (player.X - px) / dist
-				knz := (player.Z - pz) / dist
-				player.applyKnockback(knx, knz, s.Config.Projectile.Damage*s.Config.KnockbackScale)
-			}
-			log.Printf("[HIT] projectile %d (player %d) hit player %d | pos=(%.2f, %.2f) | health=%.0f",
-				p.ID, p.PlayerOwner, player.ID, player.X, player.Z, player.Health)
-				hit = true
-				break
 			}
 		}
+
 		if !hit {
 			alive = append(alive, p)
 		}
 	}
 	s.Projectiles = alive
 
-	// Process slash activations — instant hit detection
+	// Process slash activations — only hits Zombies (Co-op Mode, Friendly Fire Disabled)
 	cfg := s.Config.Slash
 	slashActivated := make(map[int]*Player)
 	for id, act := range activatedIDs {
@@ -257,71 +286,68 @@ func (s *GameSession) TickStep() {
 		}
 	}
 
-	for attackerID, attacker := range slashActivated {
+	for _, attacker := range slashActivated {
 		if attacker.Health <= 0 {
 			continue
 		}
-		for _, victim := range s.Players {
-			if victim.ID == attackerID {
-				continue
-			}
-			if victim.Health <= 0 {
-				continue
-			}
 
-			dx := victim.X - attacker.X
-			dz := victim.Z - attacker.Z
+		attackerDirX := float32(math.Sin(float64(attacker.Angle)))
+		attackerDirZ := float32(math.Cos(float64(attacker.Angle)))
+		maxCos := float32(math.Cos(float64(cfg.ConeAngle) * math.Pi / 180))
+
+		// Slash hitting Zombies
+		for zID, z := range s.Zombies {
+			if z.Health <= 0 {
+				continue
+			}
+			dx := z.X - attacker.X
+			dz := z.Z - attacker.Z
 			dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
-			if dist > cfg.HitRadius {
-				continue
-			}
-
-			// Check if victim is in the attack cone
-			victimDirX := dx / dist
-			victimDirZ := dz / dist
-			attackerDirX := float32(math.Sin(float64(attacker.Angle)))
-			attackerDirZ := float32(math.Cos(float64(attacker.Angle)))
-			dot := victimDirX*attackerDirX + victimDirZ*attackerDirZ
-			maxCos := float32(math.Cos(float64(cfg.ConeAngle) * math.Pi / 180))
-
-			if dot < maxCos {
-				continue
-			}
-
-			// Check shield block
-			if victim.ShieldActive {
-				victimFacingX := float32(math.Sin(float64(victim.Angle)))
-				victimFacingZ := float32(math.Cos(float64(victim.Angle)))
-				// Direction from victim to attacker (where the slash comes from)
-				blockDot := (-victimDirX)*victimFacingX + (-victimDirZ)*victimFacingZ
-				if blockDot >= float32(math.Cos(50*math.Pi/180)) {
-					// Blocked by shield
-					continue
+			if dist <= cfg.HitRadius {
+				vDirX := dx / dist
+				vDirZ := dz / dist
+				dot := vDirX*attackerDirX + vDirZ*attackerDirZ
+				if dot >= maxCos {
+					z.Health -= cfg.Damage * 3.5
+					z.X += vDirX * 0.7
+					z.Z += vDirZ * 0.7
+					if z.Health <= 0 {
+						s.Wave.TotalKills++
+						delete(s.Zombies, zID)
+					}
 				}
 			}
-
-			// Check dodge
-			if victim.IsDashing {
-				continue
-			}
-
-			// Apply damage
-			victim.Health -= cfg.Damage
-			if victim.Health < 0 {
-				victim.Health = 0
-			}
-			if dist > 0.01 {
-				knx := (victim.X - attacker.X) / dist
-				knz := (victim.Z - attacker.Z) / dist
-				victim.applyKnockback(knx, knz, cfg.Damage*s.Config.KnockbackScale)
-			}
-			log.Printf("[SLASH] attacker=%d hit victim=%d damage=%.0f | health=%.0f | dist=%.2f",
-				attackerID, victim.ID, cfg.Damage, victim.Health, dist)
-			break
 		}
 	}
 
-	// Collect slash events for client VFX (all slashes, not just hits)
+	// Check for Squad Wipe (all human players dead)
+	allHumansDead := len(s.Players) > 0
+	for _, p := range s.Players {
+		if p.Health > 0 {
+			allHumansDead = false
+			break
+		}
+	}
+	if allHumansDead {
+		if !s.isGameOver {
+			s.isGameOver = true
+			s.gameOverTimer = 3.5
+			s.pendingEvents = append(s.pendingEvents, GameEvent{
+				Type:    network.EventSquadWiped,
+				Payload: []byte{uint8(s.Wave.CurrentWave)},
+			})
+		}
+	}
+
+	if s.isGameOver {
+		s.gameOverTimer -= 0.01667
+		if s.gameOverTimer <= 0 {
+			s.isGameOver = false
+			s.Reset()
+		}
+	}
+
+	// Collect slash events for client VFX
 	for _, attacker := range slashActivated {
 		evtPayload := network.EncodeSlashPayload(uint8(attacker.ID), attacker.X, attacker.Z, attacker.Angle)
 		s.pendingEvents = append(s.pendingEvents, GameEvent{
@@ -330,19 +356,132 @@ func (s *GameSession) TickStep() {
 		})
 	}
 
-	s.Projectiles = alive
+	// Process Ground Defense Turrets for players with HasTurret
+	for _, player := range s.Players {
+		if !player.HasTurret || player.Health <= 0 {
+			continue
+		}
+		player.TurretCooldown -= 0.01667
+		if player.TurretCooldown <= 0 {
+			// Find nearest zombie to player's turret
+			var closestZ *Zombie
+			var closestZID int
+			minDist := float32(12.0)
+			for zID, z := range s.Zombies {
+				if z.Health <= 0 {
+					continue
+				}
+				dx := z.X - player.TurretX
+				dz := z.Z - player.TurretZ
+				dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
+				if dist < minDist {
+					minDist = dist
+					closestZ = z
+					closestZID = zID
+				}
+			}
+
+			if closestZ != nil {
+				player.TurretCooldown = 1.1 // Balanced, deliberate heavy turret firing rate!
+				closestZ.Health -= 24.0     // Heavy autocannon damage per shot!
+				if minDist > 0.01 {
+					closestZ.X += ((closestZ.X - player.TurretX) / minDist) * 0.4
+					closestZ.Z += ((closestZ.Z - player.TurretZ) / minDist) * 0.4
+				}
+				if closestZ.Health <= 0 {
+					s.Wave.TotalKills++
+					delete(s.Zombies, closestZID)
+				}
+
+				// Broadcast turret fire event to clients
+				tAngle := float32(math.Atan2(float64(closestZ.X-player.TurretX), float64(closestZ.Z-player.TurretZ)))
+				s.pendingEvents = append(s.pendingEvents, GameEvent{
+					Type:    network.EventTurretFire,
+					Payload: network.EncodeTurretFirePayload(player.TurretX, player.TurretZ, tAngle, closestZ.X, closestZ.Z),
+				})
+			}
+		}
+	}
+
+	// Update Waves, Zombie Spawning, and AI (60s horde wave mode)
+	if len(s.Players) > 0 {
+		spawnZombie, waveJustCleared, waveJustStarted := s.Wave.Update(0.01667, len(s.Zombies))
+
+		if spawnZombie {
+			z := s.Wave.CreateWaveZombie(s.Config.FloorSize)
+			s.Zombies[z.ID] = z
+		}
+
+		if waveJustCleared {
+			s.Zombies = make(map[int]*Zombie)
+			for _, p := range s.Players {
+				maxHP := float32(100.0)
+				if p.HasArmor {
+					maxHP = 150.0
+				}
+				p.Health = maxHP // Revive and restore full health to all players!
+				p.Ammo = p.MaxAmmo
+				p.IsDashing = false
+				p.Cooldown = 0
+			}
+		}
+
+		if waveJustStarted {
+			for _, p := range s.Players {
+				if p.Health <= 0 {
+					maxHP := float32(100.0)
+					if p.HasArmor {
+						maxHP = 150.0
+					}
+					p.Health = maxHP
+					p.Ammo = p.MaxAmmo
+					p.IsDashing = false
+					p.Cooldown = 0
+				}
+			}
+		}
+
+		// Update each active zombie
+		for zID, z := range s.Zombies {
+			if z.Health <= 0 {
+				delete(s.Zombies, zID)
+				continue
+			}
+			targetPlayer := z.Update(0.01667, s.Players, s.Config.Obstacles, s.Config.FloorSize)
+			if targetPlayer != nil {
+				if !targetPlayer.ShieldActive && !targetPlayer.IsDashing {
+					targetPlayer.Health -= z.Damage
+					if targetPlayer.Health < 0 {
+						targetPlayer.Health = 0
+					}
+					s.pendingEvents = append(s.pendingEvents, GameEvent{
+						Type:    network.EventSlash,
+						Payload: network.EncodeSlashPayload(uint8(z.ID), z.X, z.Z, z.Angle),
+					})
+				}
+			}
+		}
+
+		// Broadcast wave status event to clients
+		if s.tick%6 == 0 || waveJustCleared || waveJustStarted {
+			s.pendingEvents = append(s.pendingEvents, GameEvent{
+				Type:    network.EventWaveUpdate,
+				Payload: network.EncodeWaveUpdatePayload(uint8(s.Wave.CurrentWave), s.Wave.State, s.Wave.Timer, uint8(len(s.Zombies)), uint16(s.Wave.TotalKills)),
+			})
+		}
+	}
 
 	s.mu.Unlock()
 }
 
-// GetSnapshot returns player and projectile data for encoding.
+// GetSnapshot returns player, zombie and projectile data for encoding.
 func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapshot, projectiles []network.ProjectileSnapshot) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	tick = uint16(s.tick)
 
-	players = make([]network.PlayerSnapshot, 0, len(s.Players))
+	players = make([]network.PlayerSnapshot, 0, len(s.Players)+len(s.Zombies))
 	for _, p := range s.Players {
 		players = append(players, network.PlayerSnapshot{
 			ID:             uint8(p.ID),
@@ -356,6 +495,11 @@ func (s *GameSession) GetSnapshot() (tick uint16, players []network.PlayerSnapsh
 			ShieldCooldown: p.ShieldCooldown,
 			SlashCooldown:  p.SlashCooldown,
 		})
+	}
+	for _, z := range s.Zombies {
+		if z.Health > 0 {
+			players = append(players, z.ToSnapshot())
+		}
 	}
 
 	projectiles = make([]network.ProjectileSnapshot, 0, len(s.Projectiles))
@@ -428,11 +572,23 @@ func (s *GameSession) Reset() {
 		p.TargetZ = p.Z
 		p.Health = s.Config.MaxHealth
 		p.Cooldown = 0
+		p.Ammo = 5
+		p.MaxAmmo = 5
 		p.DashCooldown = 0
 		p.ShieldCooldown = 0
 		p.SlashCooldown = 0
 		p.IsDashing = false
 		p.ShieldActive = false
+		p.HasDualWield = false
+		p.HasTurret = false
+		p.HasExplosive = false
+		p.HasPiercing = false
+		p.HasArmor = false
+		p.HasCyberDash = false
 	}
 	s.Projectiles = nil
+	s.Zombies = make(map[int]*Zombie)
+	s.Wave = NewWaveManager()
+	s.isGameOver = false
+	s.gameOverTimer = 0
 }

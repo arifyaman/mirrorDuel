@@ -23,6 +23,7 @@ export class Physics {
     this._fireTrails = [];
     this._fireSparks = [];
     this._fireImpacts = [];
+    this.playerPerks = new Map();
     this.app = app;
   }
 

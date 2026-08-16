@@ -60,6 +60,33 @@ func (m *RoomManager) HandleMessage(session SessionIface, msg *network.SessionMe
 		m.handlePlayerInput(session, msg.Payload)
 	case network.MSGPing:
 		m.handlePing(session, msg.Payload)
+	case network.MSGSelectPerk:
+		m.handleSelectPerk(session, msg.Payload)
+	}
+}
+
+// handleSelectPerk applies the chosen perk to the player.
+func (m *RoomManager) handleSelectPerk(session SessionIface, payload []byte) {
+	if len(payload) < 1 {
+		return
+	}
+	perkID := payload[0]
+	for _, room := range m.Rooms {
+		room.mu.Lock()
+		for _, player := range room.Players {
+			if player.Session == session {
+				player.ApplyPerk(perkID)
+				log.Printf("[PERK] Player %d equipped perk %d", player.ID, perkID)
+
+				// Broadcast perk update to all players in the room
+				room.pendingEvents = append(room.pendingEvents, GameEvent{
+					Type:    network.EventPlayerPerks,
+					Payload: network.EncodePlayerPerksPayload(uint8(player.ID), player.GetPerkMask()),
+				})
+				break
+			}
+		}
+		room.mu.Unlock()
 	}
 }
 
@@ -199,10 +226,16 @@ type JoinResult struct {
 }
 
 func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult {
+	// First clean up any empty rooms
+	m.CleanupEmptyRooms()
+
 	// Priority 1: Find a room with exactly 1 player waiting for a duel
 	var room *GameSession
 	for _, r := range m.Rooms {
-		if len(r.Players) == 1 {
+		r.mu.Lock()
+		count := len(r.Players)
+		r.mu.Unlock()
+		if count == 1 {
 			room = r
 			break
 		}
@@ -211,7 +244,10 @@ func (m *RoomManager) join(session SessionIface, playerName string) *JoinResult 
 	// Priority 2: Find any room with < 2 players
 	if room == nil {
 		for _, r := range m.Rooms {
-			if len(r.Players) < 2 {
+			r.mu.Lock()
+			count := len(r.Players)
+			r.mu.Unlock()
+			if count < 2 {
 				room = r
 				break
 			}
@@ -324,20 +360,23 @@ func (m *RoomManager) broadcast() {
 
 // HandleDisconnect is called when a session closes.
 func (m *RoomManager) HandleDisconnect(session SessionIface) {
-	playerID := session.PlayerID()
-	if playerID == 0 {
-		return
-	}
-
 	for i := len(m.Rooms) - 1; i >= 0; i-- {
 		room := m.Rooms[i]
 		room.mu.Lock()
-		if _, hasPlayer := room.Players[playerID]; !hasPlayer {
+		var foundID int
+		for id, p := range room.Players {
+			if p.Session == session {
+				foundID = id
+				break
+			}
+		}
+
+		if foundID == 0 {
 			room.mu.Unlock()
 			continue
 		}
 
-		delete(room.Players, playerID)
+		delete(room.Players, foundID)
 
 		if len(room.Players) == 0 {
 			log.Printf("[Room] Empty room %d removed", room.RoomID)
@@ -348,13 +387,13 @@ func (m *RoomManager) HandleDisconnect(session SessionIface) {
 				m.Callbacks.OnSessionDisconnect(session)
 			}
 
-			log.Printf("[Room] Player %d disconnected", playerID)
+			log.Printf("[Room] Player %d disconnected", foundID)
 			return
 		}
 
 		room.mu.Unlock()
 
-		log.Printf("[Room] Player %d disconnected, room %d now has %d player(s) waiting", playerID, room.RoomID, len(room.Players))
+		log.Printf("[Room] Player %d disconnected, room %d now has %d player(s) waiting", foundID, room.RoomID, len(room.Players))
 		return
 	}
 }

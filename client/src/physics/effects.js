@@ -380,7 +380,7 @@ export function createDashGhost(physics, playerId, x, y, z, angle) {
   }[playerId] || { diffuse: new Color(0.5, 0.5, 0.5), emissive: new Color(0.2, 0.2, 0.2) };
 
   const ghost = new Entity('dashGhost');
-  ghost.addComponent('render', { type: 'box' });
+  ghost.addComponent('render', { type: 'sphere' });
   const mat = new StandardMaterial();
   mat.diffuse = col.diffuse;
   mat.emissive = col.emissive;

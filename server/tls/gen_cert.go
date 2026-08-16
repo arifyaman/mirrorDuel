@@ -45,7 +45,11 @@ func main() {
 		panic(err)
 	}
 
-	if err := os.WriteFile("tls/cert.pem", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), 0644); err != nil {
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	if err := os.WriteFile("tls/cert.pem", certPEM, 0644); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile("tls/localhost.pem", certPEM, 0644); err != nil {
 		panic(err)
 	}
 
@@ -53,7 +57,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := os.WriteFile("tls/key.pem", pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecPriv}), 0600); err != nil {
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecPriv})
+	if err := os.WriteFile("tls/key.pem", keyPEM, 0600); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile("tls/localhost-key.pem", keyPEM, 0600); err != nil {
 		panic(err)
 	}
 

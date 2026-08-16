@@ -20,10 +20,12 @@ import { HelpModal } from './help-modal.js';
 import { NicknameModal } from './nickname-modal.js';
 import { AudioEngine } from './audio.js';
 import { AudioButton } from './audio-button.js';
+import { PerkManager } from './perks.js';
+import { createGroundTurret } from './physics/players.js';
 
 const DT = 0.01667;
 const COOLDOWN_CIRCUMFERENCE = 2 * Math.PI * 32;
-const COOLDOWN_MAX = 3;
+const COOLDOWN_MAX = 0.14;
 const PITCH_BY_PLAYER = { 1: 1.0, 2: 0.92 };
 
 export class Game {
@@ -52,6 +54,8 @@ export class Game {
     this.networkClient = new NetworkClient(serverUrl);
 this.network = new Network(this.networkClient, this);
     this.physics = new Physics(this.app);
+    this.perks = new PerkManager();
+    this.physics.perks = this.perks;
     this.input = new Input(this.canvas, this.network);
     this.input.setCamera(this.scene.cameraComponent);
     this.input.init();
@@ -59,6 +63,10 @@ this.network = new Network(this.networkClient, this);
     this.myDashCooldown = 0;
     this.myShieldCooldown = 0;
     this.mySlashCooldown = 0;
+    this._seenProjIds = new Set();
+    this._wasReloading = false;
+    this._prevWave = 1;
+    this._prevWaveState = 0;
     this._prevCooldowns = {};
     this._prevHealth = {};
     this._myPlayerPos = { x: 0, z: 0 };
@@ -110,6 +118,7 @@ this.network = new Network(this.networkClient, this);
 
     const myPlayer = players.find(p => p.id === this.network.myPlayerId);
     if (myPlayer) {
+      this.myHealth = myPlayer.health;
       this.myCooldown = Math.max(0, myPlayer.cooldown);
       this.myDashCooldown = Math.max(0, myPlayer.dashCooldown);
       this.myShieldCooldown = Math.max(0, myPlayer.shieldCooldown);
@@ -117,16 +126,21 @@ this.network = new Network(this.networkClient, this);
       this._myPlayerPos.x = myPlayer.x;
       this._myPlayerPos.z = myPlayer.z;
       this._myPlayerAngle = myPlayer.angle;
+
+      // Detect reload sound triggers
+      if (myPlayer.cooldown > 0.3 && !this._wasReloading) {
+        this._wasReloading = true;
+        this.audio.playReloadStart(PITCH_BY_PLAYER[myPlayer.id] || 1);
+      } else if (myPlayer.cooldown <= 0.05 && this._wasReloading) {
+        this._wasReloading = false;
+        this.audio.playReloadFinish(PITCH_BY_PLAYER[myPlayer.id] || 1);
+      }
     }
 
-    // Detect skill activations: cooldown jumps from 0 to >0, for every player
+    // Detect skill activations: dash & shield cooldown jumps from 0 to >0
     for (const p of players) {
       const prev = this._prevCooldowns[p.id] || { fire: 0, dash: 0, shield: 0 };
       const pitchMult = PITCH_BY_PLAYER[p.id] || 1;
-      if (prev.fire <= 0 && p.cooldown > 0) {
-        this.audio.playFire(pitchMult);
-        if (p.id === this.network.myPlayerId && this.gameTitle) this.gameTitle.triggerJump();
-      }
       if (prev.dash <= 0 && p.dashCooldown > 0) {
         this.audio.playDash(pitchMult);
       }
@@ -134,6 +148,24 @@ this.network = new Network(this.networkClient, this);
         this.audio.playShieldActivate(pitchMult);
       }
       this._prevCooldowns[p.id] = { fire: p.cooldown, dash: p.dashCooldown, shield: p.shieldCooldown };
+    }
+
+    // Play gunshot audio for every newly spawned bullet projectile!
+    if (projectiles) {
+      for (const proj of projectiles) {
+        if (!this._seenProjIds.has(proj.id)) {
+          this._seenProjIds.add(proj.id);
+          if (this._seenProjIds.size > 200) {
+            const first = this._seenProjIds.values().next().value;
+            this._seenProjIds.delete(first);
+          }
+          const pitchMult = PITCH_BY_PLAYER[proj.ownerId] || 1;
+          this.audio.playFire(pitchMult);
+          if (proj.ownerId === this.network.myPlayerId && this.gameTitle) {
+            this.gameTitle.triggerJump();
+          }
+        }
+      }
     }
 
     // Detect hits: health drop on any player
@@ -149,37 +181,46 @@ this.network = new Network(this.networkClient, this);
         this.audio.playHit(isMe);
         if (isMe) this.ui.showHitIndicator();
         if (p.health <= 0 && prev > 0) {
-          const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
-          this.physics.createExplosion(p.x, p.y, p.z, explosionColor);
-          this.ui.showDeathLabel(isMe);
-          this.audio.playDeath();
-          console.log(`[DEATH] ${who} died!`);
+          if (p.id >= 100) {
+            // Zombie killed
+            this.physics.createExplosion(p.x, p.y, p.z, '#00e676');
+            this.audio.playHit(false);
+          } else {
+            // Human player downed
+            const explosionColor = p.id === 1 ? '#ff4444' : '#4488ff';
+            this.physics.createExplosion(p.x, p.y, p.z, explosionColor);
+            if (isMe) {
+              this.ui.showWaveBanner('YOU DIED!', 'WAITING FOR SQUAD TO CLEAR WAVE...', '#ff1744');
+              this.audio.playDeath();
+            }
+          }
         }
       }
-      // Clear death labels if a dead player is alive again (room reset)
+      // Clear death labels if a dead player is alive again (room reset or wave revive)
       if (prev !== undefined && prev <= 0 && p.health > 0) {
         this.ui.clearDeathLabels();
       }
       this._prevHealth[p.id] = p.health;
     }
 
-    // Camera target: midpoint between players if 2+, else single player
-    if (players.length >= 2) {
+    // Camera target: only track human players (id < 100), never track zombies!
+    const humanPlayers = players.filter(p => p.id < 100 && p.health > 0);
+    if (humanPlayers.length >= 2) {
       let cx = 0, cz = 0;
-      for (const p of players) {
+      for (const p of humanPlayers) {
         cx += p.x;
         cz += p.z;
       }
-      this._cameraTarget.x = cx / players.length;
-      this._cameraTarget.z = cz / players.length;
+      this._cameraTarget.x = cx / humanPlayers.length;
+      this._cameraTarget.z = cz / humanPlayers.length;
+      this.scene.setPlayerPositions(humanPlayers.map(p => ({ x: p.x, z: p.z })));
     } else {
       this._cameraTarget.x = this._myPlayerPos.x;
       this._cameraTarget.z = this._myPlayerPos.z;
+      this.scene.setPlayerPositions([{ x: this._myPlayerPos.x, z: this._myPlayerPos.z }]);
     }
 
-    // Pass player positions to scene for zoom calculation
-    this.scene.setPlayerPositions(players.map(p => ({ x: p.x, z: p.z })));
-
+    this.physics.myPlayerId = this.network.myPlayerId;
     this.physics.applySnapshot(players, projectiles);
     const names = {};
     if (this.network.myPlayerId) {
@@ -187,7 +228,7 @@ this.network = new Network(this.networkClient, this);
       const opponentId = this.network.myPlayerId === 1 ? 2 : 1;
       if (this.network.opponentName) names[opponentId] = this.network.opponentName;
     }
-    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [3, 7, 7], this.network.myPlayerId, names);
+    this.ui.update(players, [this.myCooldown, this.myDashCooldown, this.myShieldCooldown], [0.14, 7, 7], this.network.myPlayerId, names);
 
     // Process game events from snapshot
     if (events) {
@@ -198,6 +239,68 @@ this.network = new Network(this.networkClient, this);
           this.onPerfectBlockEvent(evt.playerId, evt.x, evt.z, evt.angle);
         } else if (evt.type === 3) { // EVENT_SHIELD_BLOCK
           this.onShieldBlockEvent(evt.playerId, evt.x, evt.z, evt.angle);
+        } else if (evt.type === 4) { // EVENT_EXPLOSION
+          this.physics.createExplosion(evt.x, 0.25, evt.z, '#ff3d00');
+          this.audio.playBoomExplosion();
+        } else if (evt.type === 5) { // EVENT_TURRET_FIRE
+          if (!this.physics.groundTurret) {
+            this.physics.groundTurret = createGroundTurret(this.physics, evt.tx, evt.tz);
+          }
+          if (this.physics.groundTurret) {
+            this.physics.groundTurret.head.setEulerAngles(0, (evt.angle + Math.PI) * (180 / Math.PI), 0);
+          }
+          this.physics.createExplosion(evt.zx, 0.25, evt.zz, '#00e5ff');
+          this.audio.playTurretFire();
+        } else if (evt.type === 6) { // EVENT_PLAYER_PERKS
+          this.physics.playerPerks.set(evt.playerId, evt.perkMask);
+        } else if (evt.type === 10) { // EVENT_WAVE_UPDATE
+          this.ui.updateWave(evt.wave, evt.state, evt.timeLeft, evt.aliveZombies, evt.totalKills);
+          if (evt.state === 1 && this._prevWaveState === 0) {
+            this.ui.showWaveBanner(`🏆 WAVE ${evt.wave} CLEARED!`, 'CHOOSE YOUR REWARD!', '#00e676');
+            this.audio.playWaveClear();
+
+            // Open 3-perk holographic upgrade selection modal!
+            const choices = this.perks.getRandomChoices(3);
+            setTimeout(() => {
+              this.audio.playUpgradeOpen();
+              this.ui.showUpgradeModal(choices, (selectedPerk) => {
+                this.perks.add(selectedPerk.id);
+                this.audio.playUpgradeSelect();
+
+                // If sentry_turret selected, immediately place ground turret at current location
+                if (selectedPerk.id === 'sentry_turret' && !this.physics.groundTurret) {
+                  this.physics.groundTurret = createGroundTurret(this.physics, this._myPlayerPos.x, this._myPlayerPos.z);
+                }
+
+                // Send perk selection to server
+                const PERK_MAP = {
+                  'dual_wield': 1,
+                  'sentry_turret': 2,
+                  'explosive_rounds': 3,
+                  'piercing_plasma': 4,
+                  'nano_armor': 5,
+                  'cyber_dash': 6
+                };
+                if (this.networkClient) {
+                  this.networkClient.sendSelectPerk(PERK_MAP[selectedPerk.id] || 1);
+                }
+
+                this.ui.showWaveBanner(`⚡ ${selectedPerk.title} EQUIPPED!`, selectedPerk.subtitle, selectedPerk.rarityColor);
+              });
+            }, 600);
+          } else if (evt.state === 0 && this._prevWaveState === 1) {
+            this.ui.closeUpgradeModal();
+            this.ui.showWaveBanner(`⚠️ WAVE ${evt.wave} STARTING!`, 'ELIMINATE ALL THREATS!', '#ff3d00');
+            this.audio.playWaveStart();
+          }
+          this._prevWave = evt.wave;
+          this._prevWaveState = evt.state;
+        } else if (evt.type === 11) { // EVENT_SQUAD_WIPED
+          this.ui.closeUpgradeModal();
+          this.ui.showWaveBanner('💀 SQUAD WIPED!', `SURVIVED TO WAVE ${evt.wave} • RESTARTING IN 3s...`, '#ff1744');
+          this.audio.playDeath();
+          this.perks.reset(this.physics);
+          this._prevWaveState = 0;
         }
       }
     }
@@ -262,8 +365,7 @@ this.network = new Network(this.networkClient, this);
     if (this.mySlashCooldown > 0) {
       this.mySlashCooldown = Math.max(0, this.mySlashCooldown - dt);
     }
-    const myId = this.network.myPlayerId;
-    const dead = this._prevHealth[myId] !== undefined && this._prevHealth[myId] <= 0;
+    const dead = typeof this.myHealth === 'number' && this.myHealth <= 0;
     const paused = (this.helpModal && this.helpModal.isOpen) || (this.nicknameModal && this.nicknameModal.isOpen);
     const moveX = dead || paused ? 0 : (this.input.keys['d'] ? 1 : 0) - (this.input.keys['a'] ? 1 : 0);
     const moveZ = dead || paused ? 0 : (this.input.keys['w'] ? 1 : 0) - (this.input.keys['s'] ? 1 : 0);
@@ -273,6 +375,7 @@ this.network = new Network(this.networkClient, this);
       if (this.input.dash) flags |= 0x02;
       if (this.input.shield) flags |= 0x04;
       if (this.input.inputSlash) flags |= 0x08;
+      if (this.input.reload) flags |= 0x10;
     }
     this.networkClient.update(dt, moveX, moveZ, this.input.mouseX, this.input.mouseY, flags);
     this.updatePingDisplay();

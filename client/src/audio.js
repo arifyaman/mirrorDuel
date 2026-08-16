@@ -133,8 +133,8 @@ export class AudioEngine {
 
   playFire(pitchMult = 1) {
     if (!this.ctx) return;
-    this._tone(950 * pitchMult, 260 * pitchMult, 0.14, { type: 'sawtooth', gain: 0.28, filterFreq: 1400 * pitchMult, filterQ: 4 });
-    this._noiseBurst(0.08, { gain: 0.08, freqStart: 3000, freqEnd: 1200, q: 0.7 });
+    this._tone(1250 * pitchMult, 120 * pitchMult, 0.07, { type: 'sawtooth', gain: 0.22, filterFreq: 2400 * pitchMult, filterQ: 3 });
+    this._noiseBurst(0.06, { gain: 0.20, freqStart: 4500, freqEnd: 700, q: 1.4 });
   }
 
   playDash(pitchMult = 1) {
@@ -184,6 +184,69 @@ export class AudioEngine {
     if (!this.ctx) return;
     this._tone(220, 40, 0.7, { type: 'sine', gain: 0.35, attack: 0.005 });
     this._noiseBurst(0.6, { gain: 0.28, filterType: 'lowpass', freqStart: 900, freqEnd: 80, q: 0.7, attack: 0.01 });
+  }
+
+  playReloadStart(pitchMult = 1) {
+    if (!this.ctx) return;
+    // Mechanical magazine drop click
+    this._tone(850 * pitchMult, 320 * pitchMult, 0.08, { type: 'triangle', gain: 0.22, attack: 0.002 });
+    this._noiseBurst(0.06, { gain: 0.16, freqStart: 3800, freqEnd: 1200, q: 2 });
+  }
+
+  playReloadFinish(pitchMult = 1) {
+    if (!this.ctx) return;
+    // Solid mag slap in + bolt rack slide
+    this._tone(480 * pitchMult, 950 * pitchMult, 0.08, { type: 'square', gain: 0.24, attack: 0.002 });
+    this._tone(950 * pitchMult, 1400 * pitchMult, 0.07, { type: 'sawtooth', gain: 0.18, attack: 0.004, delay: 0.035 });
+    this._noiseBurst(0.08, { gain: 0.24, freqStart: 5000, freqEnd: 1400, q: 1.8, delay: 0.03 });
+  }
+
+  playWaveClear() {
+    if (!this.ctx) return;
+    // Triumphant ascending victory fanfare
+    this._tone(523.25, 523.25, 0.15, { type: 'triangle', gain: 0.22, attack: 0.01 }); // C5
+    this._tone(659.25, 659.25, 0.15, { type: 'triangle', gain: 0.22, attack: 0.01, delay: 0.12 }); // E5
+    this._tone(783.99, 783.99, 0.25, { type: 'triangle', gain: 0.25, attack: 0.01, delay: 0.24 }); // G5
+    this._tone(1046.5, 1046.5, 0.45, { type: 'sine', gain: 0.3, attack: 0.02, delay: 0.38 }); // C6
+  }
+
+  playWaveStart() {
+    if (!this.ctx) return;
+    // Low sub-bass warhorn drop + combat alert
+    this._tone(150, 45, 0.6, { type: 'sawtooth', gain: 0.32, attack: 0.01 });
+    this._tone(880, 440, 0.2, { type: 'square', gain: 0.18, attack: 0.005, delay: 0.08 });
+    this._noiseBurst(0.3, { gain: 0.2, freqStart: 2500, freqEnd: 400, q: 1.5 });
+  }
+
+  playUpgradeOpen() {
+    if (!this.ctx) return;
+    // Shimmering celestial synth open
+    this._tone(440, 880, 0.25, { type: 'sine', gain: 0.2, attack: 0.01 });
+    this._tone(659, 1318, 0.35, { type: 'triangle', gain: 0.22, attack: 0.02, delay: 0.08 });
+    this._tone(880, 1760, 0.45, { type: 'sine', gain: 0.25, attack: 0.02, delay: 0.16 });
+  }
+
+  playUpgradeSelect() {
+    if (!this.ctx) return;
+    // Punchy futuristic power-up chime
+    this._tone(300, 600, 0.08, { type: 'sawtooth', gain: 0.25, attack: 0.005 });
+    this._tone(600, 1200, 0.2, { type: 'sine', gain: 0.3, attack: 0.01, delay: 0.05 });
+    this._noiseBurst(0.12, { gain: 0.2, freqStart: 4000, freqEnd: 800, q: 2 });
+  }
+
+  playBoomExplosion() {
+    if (!this.ctx) return;
+    // Loud artillery explosion BOOM / GÜMM!
+    this._tone(180, 24, 0.75, { type: 'sawtooth', gain: 0.55, attack: 0.005 });
+    this._tone(90, 18, 0.95, { type: 'sine', gain: 0.65, attack: 0.005 });
+    this._noiseBurst(0.65, { gain: 0.5, filterType: 'lowpass', freqStart: 1800, freqEnd: 70, q: 1.4, attack: 0.005 });
+  }
+
+  playTurretFire() {
+    if (!this.ctx) return;
+    // Heavy mechanical robotic autocannon pop
+    this._tone(920, 280, 0.05, { type: 'sawtooth', gain: 0.22, attack: 0.002 });
+    this._noiseBurst(0.06, { gain: 0.2, freqStart: 4500, freqEnd: 1200, q: 2 });
   }
 
   playUiClick() {

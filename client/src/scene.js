@@ -114,21 +114,18 @@ export class Scene {
     this.app.scene.ambientLight = new Color(0.15, 0.16, 0.2);
   }
 
-updateCamera(dt) {
-    const off = this.cameraOffset;
+  updateCamera(dt) {
     const target = this.cameraTargetMid;
     const lerpFactor = 1 - Math.exp(-4 * (dt || 0.016));
 
-    // Calculate zoom scale based on player spread
+    // Calculate zoom scale based on human player spread
     let zoomScale = 1;
     if (this._playerPositions.length >= 2) {
       const p0 = this._playerPositions[0];
       const p1 = this._playerPositions[1];
-      const dist = Math.sqrt(
-        (p1.x - p0.x) ** 2 + (p1.z - p0.z) ** 2
-      );
-      // Scale up when players are far apart
-      zoomScale = 1 + Math.max(0, dist - 10) * 0.08;
+      const dist = Math.sqrt((p1.x - p0.x) ** 2 + (p1.z - p0.z) ** 2);
+      // Gentle scale capped between 1.0 and 1.25
+      zoomScale = Math.min(1.25, 1 + Math.max(0, dist - 10) * 0.03);
     }
 
     const baseY = this.cameraBaseY * zoomScale;
