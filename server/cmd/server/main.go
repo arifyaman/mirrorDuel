@@ -261,6 +261,10 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"0.3.0","players":%d}`, rm.PlayerCount())
 		}))
+		mux.HandleFunc("/cert-hash", cors(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"hash":"%s"}`, certHash)
+		}))
 		if len(certPEM) > 0 {
 			mux.HandleFunc("/cert-pem", cors(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/x-pem-file")

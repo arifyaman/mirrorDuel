@@ -184,11 +184,12 @@ func (s *Session) SendDisconnect() {
 func (s *Session) readLoop() {
 	defer s.Close()
 
+	var buf []byte
+	tmp := make([]byte, 4096)
+
 	for s.connected.Load() {
 		s.stream.SetReadDeadline(time.Now().Add(readTimeout))
 
-		// Read into a temporary buffer
-		tmp := make([]byte, 4096)
 		n, err := s.stream.Read(tmp)
 		if err != nil {
 			log.Printf("[Session] %s stream read error: %v (n=%d)", s.id, err, n)
@@ -199,13 +200,11 @@ func (s *Session) readLoop() {
 			continue
 		}
 
-		// Process data in buf
-		buf := tmp[:n]
+		buf = append(buf, tmp[:n]...)
 
 		for len(buf) > 0 {
 			// Need at least 4 bytes for length header
 			if len(buf) < 4 {
-				// Should not happen with normal reads, but handle it
 				break
 			}
 

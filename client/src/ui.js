@@ -20,6 +20,7 @@ export class UI {
     this.container = null;
     this._createCooldownElements();
     this._createFlashOverlay();
+    this._createWaveHUD();
   }
 
   update(players, cooldowns, maxPerSkill, myPlayerId, names) {
@@ -64,13 +65,18 @@ export class UI {
         continue;
       }
 
-      worldPos.set(p.x, p.y + 1.6, p.z);
+      worldPos.set(p.x, p.y + (p.id >= 100 ? 1.35 : 1.6), p.z);
       camera.worldToScreen(worldPos, canvas.width, canvas.height, screenPos);
       el.style.display = 'block';
       el.style.left = `${screenPos.x}px`;
       el.style.top = `${screenPos.y}px`;
-      el.style.color = PLAYER_NAME_COLORS[p.id] || '#fff';
-      el.textContent = (names && names[p.id]) || ('P' + p.id);
+      if (p.id >= 100) {
+        el.style.color = '#ff3d00';
+        el.textContent = '🧟 ZOMBIE';
+      } else {
+        el.style.color = PLAYER_NAME_COLORS[p.id] || '#fff';
+        el.textContent = (names && names[p.id]) || ('P' + p.id);
+      }
     }
 
     for (const [id, el] of this.nameLabelEls) {
@@ -94,11 +100,13 @@ export class UI {
       bar.bg.enabled = !dead;
       bar.fill.enabled = !dead;
       if (dead) continue;
-      const ratio = Math.max(0, Math.min(1, p.health / 100));
-      const fullWidth = 1.6;
+      const maxHp = p.id >= 100 ? 24 : 100;
+      const ratio = Math.max(0, Math.min(1, p.health / maxHp));
+      const fullWidth = p.id >= 100 ? 0.9 : 1.6;
+      bar.bg.setLocalScale(fullWidth, 0.08, 0.08);
       bar.fill.setLocalScale(fullWidth * ratio, 0.08, 0.08);
-      bar.bg.setPosition(p.x, p.y + 1.4, p.z);
-      bar.fill.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + 1.4, p.z);
+      bar.bg.setPosition(p.x, p.y + (p.id >= 100 ? 1.2 : 1.4), p.z);
+      bar.fill.setPosition(p.x + (ratio - 1) * fullWidth * 0.5, p.y + (p.id >= 100 ? 1.2 : 1.4), p.z);
       const fillMat = bar.fill.render.material;
       if (ratio > 0.6) {
         fillMat.diffuse = new Color(0.0, 0.85, 0.1);
@@ -390,13 +398,13 @@ export class UI {
       iconSvg.appendChild(iconGroup);
 
       const keyLabel = document.createElement('div');
-      const keys = ['R', 'Space', 'F'];
-      keyLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.6);font-family:monospace;font-size:10px;font-weight:bold;white-space:nowrap;';
+      const keys = ['L-Click / R', 'Space', 'F'];
+      keyLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.7);font-family:monospace;font-size:9px;font-weight:bold;white-space:nowrap;';
       keyLabel.textContent = keys[i];
 
       const label = document.createElement('div');
-      label.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);font-family:monospace;font-size:10px;white-space:nowrap;';
-      label.textContent = 'Skill ' + (i + 1);
+      label.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.6);font-family:monospace;font-size:10px;white-space:nowrap;';
+      label.textContent = i === 0 ? 'Burst (5)' : (i === 1 ? 'Dash' : 'Shield');
 
       wrapper.appendChild(svg);
       wrapper.appendChild(iconSvg);
@@ -418,16 +426,44 @@ export class UI {
       const label = this.texts[i];
       if (!ring || !label) continue;
       const cd = cooldowns[i] || 0;
-      const max = (maxPerSkill && maxPerSkill[i]) || this.max;
-      if (cd <= 0) {
-        ring.setAttribute('stroke-dashoffset', 0);
-        label.textContent = i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield');
+
+      if (i === 0) {
+        // Weapon skill (5-shot burst + reload)
+        if (cd > 0.20) {
+          // In reload state (1.35s)
+          const ratio = 1 - (cd / 1.35);
+          ring.setAttribute('stroke', '#ffaa00');
+          ring.setAttribute('stroke-dashoffset', this.circumference * (1 - ratio));
+          label.textContent = `RELOAD ${cd.toFixed(1)}s`;
+          label.style.color = '#ffaa00';
+        } else if (cd > 0.02) {
+          // Intra-burst interval
+          ring.setAttribute('stroke', '#ff4444');
+          ring.setAttribute('stroke-dashoffset', this.circumference * (cd / 0.14));
+          label.textContent = 'BURST';
+          label.style.color = '#ff8888';
+        } else {
+          // Ready to fire 5-shot burst
+          ring.setAttribute('stroke', '#ff4444');
+          ring.setAttribute('stroke-dashoffset', 0);
+          label.textContent = 'READY (5)';
+          label.style.color = 'rgba(255,255,255,0.7)';
+        }
       } else {
-        const ratio = 1 - (cd / max);
-        ring.setAttribute('stroke-dashoffset', this.circumference * (1 - ratio));
-        label.textContent = cd > 1
-          ? Math.ceil(cd) + 's'
-          : (cd > 0.02 ? cd.toFixed(2) + 's' : (i === 0 ? 'Fire' : (i === 1 ? 'Dash' : 'Shield')));
+        // Dash & Shield
+        const max = (maxPerSkill && maxPerSkill[i]) || this.max;
+        if (cd <= 0) {
+          ring.setAttribute('stroke-dashoffset', 0);
+          label.textContent = i === 1 ? 'Dash' : 'Shield';
+          label.style.color = 'rgba(255,255,255,0.7)';
+        } else {
+          const ratio = 1 - (cd / max);
+          ring.setAttribute('stroke-dashoffset', this.circumference * (1 - ratio));
+          label.textContent = cd > 1
+            ? Math.ceil(cd) + 's'
+            : (cd > 0.02 ? cd.toFixed(2) + 's' : (i === 1 ? 'Dash' : 'Shield'));
+          label.style.color = 'rgba(255,255,255,0.7)';
+        }
       }
     }
   }
@@ -498,6 +534,391 @@ export class UI {
     }
     if (this.flashOverlay && this.flashOverlay.parentNode) {
       this.flashOverlay.parentNode.removeChild(this.flashOverlay);
+    }
+    if (this.waveHUD && this.waveHUD.parentNode) {
+      this.waveHUD.parentNode.removeChild(this.waveHUD);
+    }
+  }
+
+  _createWaveHUD() {
+    this.waveHUD = document.createElement('div');
+    this.waveHUD.id = 'wave-hud';
+    this.waveHUD.style.cssText = `
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(12, 18, 26, 0.88);
+      backdrop-filter: blur(8px);
+      padding: 8px 24px;
+      border-radius: 20px;
+      border: 1px solid rgba(0, 230, 118, 0.4);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.8), 0 0 15px rgba(0, 230, 118, 0.25);
+      z-index: 120;
+      font-family: 'Courier New', monospace;
+      user-select: none;
+      pointer-events: none;
+    `;
+
+    this.waveBadge = document.createElement('div');
+    this.waveBadge.style.cssText = `
+      font-weight: 900;
+      font-size: 16px;
+      color: #00e676;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(0, 230, 118, 0.8);
+      white-space: nowrap;
+    `;
+    this.waveBadge.textContent = 'WAVE 1';
+
+    const divider1 = document.createElement('div');
+    divider1.style.cssText = 'width: 1px; height: 18px; background: rgba(255,255,255,0.2);';
+
+    this.timerBadge = document.createElement('div');
+    this.timerBadge.style.cssText = `
+      font-weight: bold;
+      font-size: 15px;
+      color: #ffffff;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      text-shadow: 0 0 6px rgba(255,255,255,0.4);
+    `;
+    this.timerBadge.textContent = '⏱️ 01:00';
+
+    const divider2 = document.createElement('div');
+    divider2.style.cssText = 'width: 1px; height: 18px; background: rgba(255,255,255,0.2);';
+
+    this.threatBadge = document.createElement('div');
+    this.threatBadge.style.cssText = `
+      font-weight: bold;
+      font-size: 14px;
+      color: #ffaa00;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      text-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+    `;
+    this.threatBadge.textContent = '🧟 0 | 💀 0';
+
+    this.waveHUD.appendChild(this.waveBadge);
+    this.waveHUD.appendChild(divider1);
+    this.waveHUD.appendChild(this.timerBadge);
+    this.waveHUD.appendChild(divider2);
+    this.waveHUD.appendChild(this.threatBadge);
+    document.body.appendChild(this.waveHUD);
+  }
+
+  updateWave(wave, state, timeLeft, aliveZombies, totalKills) {
+    if (!this.waveBadge || !this.timerBadge || !this.threatBadge) return;
+
+    if (state === 0) {
+      // Wave in progress (60s round)
+      const mins = Math.floor(timeLeft / 60);
+      const secs = Math.floor(timeLeft % 60);
+      const timeStr = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+      this.waveBadge.textContent = `WAVE ${wave}`;
+      this.waveBadge.style.color = '#00e676';
+      this.waveBadge.style.textShadow = '0 0 10px rgba(0, 230, 118, 0.8)';
+      this.timerBadge.textContent = `⏱️ ${timeStr}`;
+      this.timerBadge.style.color = timeLeft <= 10 ? '#ff3d00' : '#ffffff';
+      this.threatBadge.textContent = `🧟 ${aliveZombies} | 💀 ${totalKills}`;
+    } else {
+      // Intermission (5s countdown)
+      this.waveBadge.textContent = `WAVE ${wave} CLEAR!`;
+      this.waveBadge.style.color = '#ffaa00';
+      this.waveBadge.style.textShadow = '0 0 12px rgba(255, 170, 0, 0.9)';
+      this.timerBadge.textContent = `NEXT IN ${Math.ceil(timeLeft)}s`;
+      this.timerBadge.style.color = '#00e676';
+      this.threatBadge.textContent = `💀 ${totalKills} KILLS`;
+    }
+  }
+
+  showWaveBanner(title, subtitle, color = '#00e676') {
+    const banner = document.createElement('div');
+    banner.style.cssText = `
+      position: fixed;
+      top: 35%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: rgba(10, 15, 20, 0.92);
+      border: 2px solid ${color};
+      border-radius: 16px;
+      padding: 24px 48px;
+      text-align: center;
+      box-shadow: 0 0 40px ${color}, inset 0 0 20px ${color};
+      z-index: 250;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-family: 'Impact', 'Arial Black', sans-serif;
+    `;
+
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = `
+      font-size: 42px;
+      font-weight: 900;
+      color: ${color};
+      letter-spacing: 3px;
+      text-shadow: 0 0 20px ${color};
+      margin-bottom: 6px;
+    `;
+    titleEl.textContent = title;
+
+    const subEl = document.createElement('div');
+    subEl.style.cssText = `
+      font-size: 18px;
+      color: #ffffff;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+      opacity: 0.9;
+    `;
+    subEl.textContent = subtitle;
+
+    banner.appendChild(titleEl);
+    banner.appendChild(subEl);
+    document.body.appendChild(banner);
+
+    requestAnimationFrame(() => {
+      banner.style.opacity = '1';
+      banner.style.transform = 'translate(-50%, -50%) scale(1)';
+    });
+
+    setTimeout(() => {
+      banner.style.opacity = '0';
+      banner.style.transform = 'translate(-50%, -50%) scale(1.1)';
+      setTimeout(() => banner.remove(), 400);
+    }, 2400);
+  }
+
+  showUpgradeModal(perks, onSelect) {
+    // Remove existing modal if any
+    const existing = document.getElementById('upgrade-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'upgrade-modal';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(4, 8, 14, 0.88);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    const header = document.createElement('div');
+    header.style.cssText = 'text-align: center; margin-bottom: 32px;';
+
+    const title = document.createElement('div');
+    title.style.cssText = `
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      font-size: 38px;
+      color: #00e676;
+      letter-spacing: 3px;
+      text-shadow: 0 0 25px rgba(0, 230, 118, 0.8);
+      margin-bottom: 6px;
+    `;
+    title.textContent = '🎖️ WAVE COMPLETED! CHOOSE AN UPGRADE';
+
+    const subtitle = document.createElement('div');
+    subtitle.style.cssText = `
+      color: rgba(255, 255, 255, 0.7);
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      letter-spacing: 1px;
+    `;
+    subtitle.textContent = 'BİR ÖZELLİK SEÇ VE CEPHANELİĞİNİ GÜÇLENDİR (TUŞ: 1, 2, 3)';
+
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    overlay.appendChild(header);
+
+    const cardsContainer = document.createElement('div');
+    cardsContainer.style.cssText = `
+      display: flex;
+      gap: 24px;
+      max-width: 1000px;
+      width: 90%;
+      justify-content: center;
+      align-items: stretch;
+    `;
+
+    if (this._activeUpgradeModalCleanup) {
+      this._activeUpgradeModalCleanup();
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('keydown', keyHandler);
+      this._activeUpgradeModalCleanup = null;
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 300);
+    };
+    this._activeUpgradeModalCleanup = cleanup;
+
+    const selectPerk = (perk) => {
+      cleanup();
+      if (onSelect) onSelect(perk);
+    };
+
+    const keyHandler = (e) => {
+      if (e.key === '1' && perks[0]) selectPerk(perks[0]);
+      if (e.key === '2' && perks[1]) selectPerk(perks[1]);
+      if (e.key === '3' && perks[2]) selectPerk(perks[2]);
+    };
+    window.addEventListener('keydown', keyHandler);
+
+    perks.forEach((perk, index) => {
+      const card = document.createElement('div');
+      card.style.cssText = `
+        flex: 1;
+        background: linear-gradient(160deg, rgba(20, 28, 40, 0.95), rgba(10, 15, 22, 0.98));
+        border: 2px solid ${perk.rarityColor};
+        border-radius: 18px;
+        padding: 28px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 15px ${perk.rarityColor}33;
+        position: relative;
+        overflow: hidden;
+      `;
+
+      card.onmouseenter = () => {
+        card.style.transform = 'translateY(-10px) scale(1.03)';
+        card.style.boxShadow = `0 14px 40px rgba(0, 0, 0, 0.9), 0 0 30px ${perk.rarityColor}88`;
+        card.style.borderColor = '#ffffff';
+      };
+
+      card.onmouseleave = () => {
+        card.style.transform = 'translateY(0) scale(1)';
+        card.style.boxShadow = `0 8px 30px rgba(0, 0, 0, 0.7), 0 0 15px ${perk.rarityColor}33`;
+        card.style.borderColor = perk.rarityColor;
+      };
+
+      card.onclick = () => selectPerk(perk);
+
+      // Key shortcut badge
+      const keyBadge = document.createElement('div');
+      keyBadge.style.cssText = `
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-family: monospace;
+        font-size: 11px;
+        font-weight: bold;
+        color: rgba(255, 255, 255, 0.8);
+      `;
+      keyBadge.textContent = `KEY [${index + 1}]`;
+      card.appendChild(keyBadge);
+
+      // Rarity tag
+      const rarityBadge = document.createElement('div');
+      rarityBadge.style.cssText = `
+        font-family: monospace;
+        font-size: 11px;
+        font-weight: bold;
+        color: ${perk.rarityColor};
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+        text-shadow: 0 0 8px ${perk.rarityColor};
+      `;
+      rarityBadge.textContent = `★ ${perk.rarity}`;
+      card.appendChild(rarityBadge);
+
+      // Big Icon
+      const icon = document.createElement('div');
+      icon.style.cssText = 'font-size: 48px; margin-bottom: 16px; filter: drop-shadow(0 0 12px rgba(255,255,255,0.3));';
+      icon.textContent = perk.icon;
+      card.appendChild(icon);
+
+      // Title
+      const perkTitle = document.createElement('div');
+      perkTitle.style.cssText = `
+        font-family: 'Impact', 'Arial Black', sans-serif;
+        font-size: 20px;
+        color: #ffffff;
+        letter-spacing: 1px;
+        margin-bottom: 4px;
+      `;
+      perkTitle.textContent = perk.title;
+      card.appendChild(perkTitle);
+
+      // Subtitle
+      const perkSub = document.createElement('div');
+      perkSub.style.cssText = `
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: ${perk.rarityColor};
+        font-weight: bold;
+        margin-bottom: 14px;
+      `;
+      perkSub.textContent = perk.subtitle;
+      card.appendChild(perkSub);
+
+      // Description
+      const desc = document.createElement('div');
+      desc.style.cssText = `
+        font-size: 13px;
+        line-height: 1.45;
+        color: rgba(255, 255, 255, 0.75);
+        margin-bottom: 22px;
+        flex: 1;
+      `;
+      desc.textContent = perk.description;
+      card.appendChild(desc);
+
+      // Select Button
+      const btn = document.createElement('div');
+      btn.style.cssText = `
+        width: 100%;
+        padding: 10px 0;
+        background: ${perk.rarityColor};
+        color: #000;
+        font-weight: bold;
+        font-size: 13px;
+        border-radius: 10px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        box-shadow: 0 0 15px ${perk.rarityColor}88;
+      `;
+      btn.textContent = 'SEÇ & KUŞAN';
+      card.appendChild(btn);
+
+      cardsContainer.appendChild(card);
+    });
+
+    overlay.appendChild(cardsContainer);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+    });
+  }
+
+  closeUpgradeModal() {
+    if (this._activeUpgradeModalCleanup) {
+      this._activeUpgradeModalCleanup();
+      this._activeUpgradeModalCleanup = null;
     }
   }
 }

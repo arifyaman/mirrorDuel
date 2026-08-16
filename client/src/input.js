@@ -23,27 +23,38 @@ export class Input {
   init() {
     window.addEventListener('keydown', e => {
       this.keys[e.key.toLowerCase()] = true;
-      if (e.key.toLowerCase() === 'r') this.fire = true;
+      if (e.key.toLowerCase() === 'r') this.reload = true;
       if (e.key === ' ') this.dash = true;
       if (e.key.toLowerCase() === 'f') this.shield = true;
+      if (e.key.toLowerCase() === 'e' || e.key.toLowerCase() === 'q') this.inputSlash = true;
     });
+
     window.addEventListener('keyup', e => {
       this.keys[e.key.toLowerCase()] = false;
-      if (e.key.toLowerCase() === 'r') this.fire = false;
+      if (e.key.toLowerCase() === 'r') this.reload = false;
       if (e.key === ' ') this.dash = false;
       if (e.key.toLowerCase() === 'f') this.shield = false;
+      if (e.key.toLowerCase() === 'e' || e.key.toLowerCase() === 'q') this.inputSlash = false;
     });
+
+    // Disable browser context menu on right click for smooth gaming controls
+    window.addEventListener('contextmenu', e => e.preventDefault());
 
     this._canvas.addEventListener('mousemove', e => this.onMouseMove(e));
     this._canvas.addEventListener('mousedown', e => {
-      if (e.button === 0) {
+      if (e.button === 0) { // Left Click -> Spray / Semi-Auto Fire
         this.mouseDown = true;
+        this.fire = true;
+      } else if (e.button === 2) { // Right Click -> Melee Knife / Slash
         this.inputSlash = true;
       }
     });
+
     this._canvas.addEventListener('mouseup', e => {
       if (e.button === 0) {
         this.mouseDown = false;
+        this.fire = false;
+      } else if (e.button === 2) {
         this.inputSlash = false;
       }
     });
@@ -51,11 +62,6 @@ export class Input {
 
   onMouseMove(e) {
     const rect = this._canvas.getBoundingClientRect();
-    // canvas.width/height always track CSS pixel size in this app (PlayCanvas
-    // clamps its internal pixel ratio to 1 since maxPixelRatio is never set),
-    // so screen coordinates must stay in plain CSS pixels too — no
-    // devicePixelRatio scaling here, or aiming breaks on HiDPI displays
-    // (e.g. Mac Retina) and at non-100% browser zoom.
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const canvasW = this._canvas.width;

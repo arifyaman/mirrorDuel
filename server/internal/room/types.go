@@ -116,6 +116,19 @@ type Player struct {
 	SlashActiveTime  float32
 	JustSlashed      bool
 
+	Ammo    int
+	MaxAmmo int
+
+	HasDualWield   bool
+	HasTurret      bool
+	TurretX        float32
+	TurretZ        float32
+	TurretCooldown float32
+	HasExplosive   bool
+	HasPiercing    bool
+	HasArmor       bool
+	HasCyberDash   bool
+
 	// Ping is this player's last self-reported RTT in ms (from their own
 	// PING payload), -1 if unknown. Relayed to the opponent for display,
 	// not part of the STATE_SNAPSHOT wire format.
@@ -134,8 +147,58 @@ func NewPlayer(id int, name string, x, y, z float32, cfg *config.Config) *Player
 		TargetX:   x,
 		TargetZ:   z,
 		Config:    cfg,
+		Ammo:      5,
+		MaxAmmo:   5,
 		Ping:      -1,
 	}
+}
+
+// ApplyPerk activates a selected upgrade perk on this player.
+func (p *Player) ApplyPerk(perkID uint8) {
+	switch perkID {
+	case 1: // dual_wield
+		p.HasDualWield = true
+		p.MaxAmmo = 10
+		p.Ammo = 10
+	case 2: // sentry_turret
+		p.HasTurret = true
+		p.TurretX = p.X
+		p.TurretZ = p.Z
+		p.TurretCooldown = 0.8
+	case 3: // explosive_rounds
+		p.HasExplosive = true
+	case 4: // piercing_plasma
+		p.HasPiercing = true
+	case 5: // nano_armor
+		p.HasArmor = true
+		p.Health = float32(math.Min(150, float64(p.Health+50)))
+	case 6: // cyber_dash
+		p.HasCyberDash = true
+	}
+}
+
+// GetPerkMask returns the bitmask of active perks for this player.
+func (p *Player) GetPerkMask() uint8 {
+	var mask uint8
+	if p.HasDualWield {
+		mask |= 1 << 0
+	}
+	if p.HasTurret {
+		mask |= 1 << 1
+	}
+	if p.HasExplosive {
+		mask |= 1 << 2
+	}
+	if p.HasPiercing {
+		mask |= 1 << 3
+	}
+	if p.HasArmor {
+		mask |= 1 << 4
+	}
+	if p.HasCyberDash {
+		mask |= 1 << 5
+	}
+	return mask
 }
 
 // QueueInput appends to the player's input buffer.
@@ -168,6 +231,10 @@ func (p *Player) ProcessInputs(dt float32) {
 			p.Cooldown = 0
 		}
 	}
+	if p.Cooldown <= 0 && p.Ammo <= 0 {
+		p.Ammo = p.MaxAmmo
+	}
+
 	if p.DashCooldown > 0 {
 		p.DashCooldown -= dt
 		if p.DashCooldown < 0 {
@@ -190,9 +257,29 @@ func (p *Player) ProcessInputs(dt float32) {
 	}
 	p.processSlash()
 
-	// Check for projectile activation (flags & 0x01)
+	// Manual reload via R key (flags & 0x10)
+	if last.Flags&0x10 != 0 && p.Ammo < p.MaxAmmo && p.Cooldown <= 0 && !p.IsDashing {
+		p.Ammo = 0
+		p.Cooldown = 1.35
+	}
+
+	// Check for projectile activation (flags & 0x01) — 5-round burst
 	if last.Flags&0x01 != 0 && p.Cooldown <= 0 && !p.IsDashing {
-		p.JustFired = true
+		if p.Ammo > 0 {
+			p.JustFired = true
+			p.Ammo--
+			if p.Ammo <= 0 {
+				p.Cooldown = 1.35 // Reload duration after burst
+			} else {
+				if p.HasExplosive {
+					p.Cooldown = 0.24 // Heavy high-caliber fire cadence
+				} else if p.HasDualWield {
+					p.Cooldown = 0.08 // Rapid dual-wield spray
+				} else {
+					p.Cooldown = 0.11 // Fast intra-burst delay
+				}
+			}
+		}
 	}
 
 	// Check for dash activation (flags & 0x02)

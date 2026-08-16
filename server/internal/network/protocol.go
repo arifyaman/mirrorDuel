@@ -13,6 +13,7 @@ const (
 	MSGStateSnapshot = 16
 	MSGRoomCreated   = 17
 	MSGPong          = 18
+	MSGSelectPerk    = 19
 	MSGDisconnect    = 255
 
 	InputSize = 13
@@ -21,6 +22,11 @@ const (
 	EventSlash        = 1
 	EventPerfectBlock = 2
 	EventShieldBlock  = 3
+	EventExplosion    = 4
+	EventTurretFire   = 5
+	EventPlayerPerks  = 6
+	EventWaveUpdate   = 10
+	EventSquadWiped   = 11
 )
 
 // PlayerInput matches the binary layout from client protocol.
@@ -222,13 +228,50 @@ func EncodePerfectBlockPayload(playerId uint8, x, z, angle float32) []byte {
 	return buf
 }
 
-// EncodeShieldBlockPayload produces the payload for a shield block event: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
+// EncodeExplosionPayload produces: [x: f32][z: f32]
+func EncodeExplosionPayload(x, z float32) []byte {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint32(buf[0:4], math.Float32bits(x))
+	binary.LittleEndian.PutUint32(buf[4:8], math.Float32bits(z))
+	return buf
+}
+
+// EncodeTurretFirePayload produces: [tx: f32][tz: f32][angle: f32][zx: f32][zz: f32] (20 bytes)
+func EncodeTurretFirePayload(tx, tz, angle, zx, zz float32) []byte {
+	buf := make([]byte, 20)
+	binary.LittleEndian.PutUint32(buf[0:4], math.Float32bits(tx))
+	binary.LittleEndian.PutUint32(buf[4:8], math.Float32bits(tz))
+	binary.LittleEndian.PutUint32(buf[8:12], math.Float32bits(angle))
+	binary.LittleEndian.PutUint32(buf[12:16], math.Float32bits(zx))
+	binary.LittleEndian.PutUint32(buf[16:20], math.Float32bits(zz))
+	return buf
+}
+
+// EncodePlayerPerksPayload produces: [playerId: u8][perkMask: u8] (2 bytes)
+func EncodePlayerPerksPayload(playerId, perkMask uint8) []byte {
+	return []byte{playerId, perkMask}
+}
+
+// EncodeShieldBlockPayload produces: [playerId: u8][x: f32][z: f32][angle: f32] (13 bytes)
 func EncodeShieldBlockPayload(playerId uint8, x, z, angle float32) []byte {
 	buf := make([]byte, 13)
 	buf[0] = playerId
 	binary.LittleEndian.PutUint32(buf[1:5], math.Float32bits(x))
 	binary.LittleEndian.PutUint32(buf[5:9], math.Float32bits(z))
 	binary.LittleEndian.PutUint32(buf[9:13], math.Float32bits(angle))
+	return buf
+}
+
+// EncodeWaveUpdatePayload produces a 7-byte wave status payload:
+// [wave: u8][state: u8][timeLeftTenths: u16][aliveZombies: u8][totalKills: u16]
+func EncodeWaveUpdatePayload(wave uint8, state uint8, timeLeft float32, aliveZombies uint8, totalKills uint16) []byte {
+	buf := make([]byte, 7)
+	buf[0] = wave
+	buf[1] = state
+	t := uint16(math.Max(0, float64(timeLeft*10)))
+	binary.LittleEndian.PutUint16(buf[2:4], t)
+	buf[4] = aliveZombies
+	binary.LittleEndian.PutUint16(buf[5:7], totalKills)
 	return buf
 }
 

@@ -24,6 +24,8 @@ export class NetworkClient {
     this._nickname = null;
     // Read buffer for length-prefixed framing
     this._readBuf = new Uint8Array();
+    this._writeQueue = [];
+    this._isWriting = false;
   }
 
   setStatus(state) {
@@ -31,6 +33,8 @@ export class NetworkClient {
     if (state !== 'connected') {
       this.ping = null;
       this.opponentPing = null;
+      this._writeQueue = [];
+      this._isWriting = false;
     }
     if (this.statusHandler) this.statusHandler(state);
   }
@@ -45,20 +49,44 @@ export class NetworkClient {
     this.setStatus('connecting');
 
     const host = this.serverUrl.includes(':') ? this.serverUrl : `${this.serverUrl}:4433`;
+    const hostName = host.split(':')[0];
 
     try {
-      this.wt = new WebTransport(`https://${host}/wt`);
+      const wtOpts = {};
+      try {
+        const certRes = await fetch(`http://${hostName}:8081/cert-hash`);
+        if (certRes.ok) {
+          const certData = await certRes.json();
+          if (certData.hash && certData.hash.length === 64) {
+            const hashArray = new Uint8Array(
+              certData.hash.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
+            );
+            wtOpts.serverCertificateHashes = [{
+              algorithm: 'sha-256',
+              value: hashArray.buffer
+            }];
+          }
+        }
+      } catch (e) {
+        // Fallback for production with valid trusted CA cert
+      }
+
+      this.wt = new WebTransport(`https://${host}/wt`, wtOpts);
       await this.wt.ready;
 
       this.stream = await this.wt.createBidirectionalStream();
       this.reader = this.stream.readable.getReader();
       this.writer = this.stream.writable.getWriter();
 
+      this._readBuf = new Uint8Array();
+      this._writeQueue = [];
+      this._isWriting = false;
+
       this.readLoop();
+      this.setStatus('connected');
       const name = nickname || this._nickname || 'Player' + Math.floor(Math.random() * 1000);
       this._nickname = name;
       await this.sendJoin(name);
-      this.setStatus('connected');
       this.pingTimer = 0;
       this.sendPing();
     } catch (err) {
@@ -121,6 +149,8 @@ export class NetworkClient {
   }
 
   disconnect() {
+    this._writeQueue = [];
+    this._isWriting = false;
     if (this.writer) { this.writer.close().catch(() => {}); }
     if (this.wt) { this.wt.close().catch(() => {}); }
     if (this.reconnectTimer) {
@@ -138,6 +168,26 @@ export class NetworkClient {
     }, 2000);
   }
 
+  async writeMessage(msg) {
+    if (!this.writer || this.state === 'disconnected') return;
+    this._writeQueue.push(msg);
+    if (this._isWriting) return;
+    this._isWriting = true;
+    try {
+      while (this._writeQueue.length > 0) {
+        if (!this.writer || this.state === 'disconnected') break;
+        const chunk = this._writeQueue.shift();
+        await this.writer.ready;
+        await this.writer.write(chunk);
+      }
+    } catch (err) {
+      console.error('[WT] Write error:', err);
+      this.setStatus('disconnected');
+    } finally {
+      this._isWriting = false;
+    }
+  }
+
   async sendJoin(name) {
     if (!this.writer) return;
     const data = encodeJoinRoom(name);
@@ -150,7 +200,7 @@ export class NetworkClient {
     msg[3] = fullLen & 0xff;
     msg[4] = MSG_JOIN_ROOM;
     msg.set(data, 5);
-    await this.writer.write(msg);
+    await this.writeMessage(msg);
   }
 
   async sendPing() {
@@ -164,11 +214,7 @@ export class NetworkClient {
     msg[3] = fullLen & 0xff;
     msg[4] = MSG_PING;
     msg.set(data, 5);
-    try {
-      await this.writer.write(msg);
-    } catch (err) {
-      console.error('[WT] Ping write error:', err);
-    }
+    await this.writeMessage(msg);
   }
 
   handlePong(payload) {
@@ -226,12 +272,20 @@ export class NetworkClient {
     msg[3] = fullLen & 0xff;
     msg[4] = MSG_PLAYER_INPUT;
     msg.set(data, 5);
-    try {
-      await this.writer.write(msg);
-    } catch (err) {
-      console.error('[WT] Write error:', err);
-      this.setStatus('disconnected');
-    }
+    await this.writeMessage(msg);
+  }
+
+  async sendSelectPerk(perkId) {
+    if (!this.writer || this.state !== 'connected') return;
+    const msg = new Uint8Array(6);
+    const fullLen = 2; // type (1 byte) + perkId (1 byte)
+    msg[0] = (fullLen >> 24) & 0xff;
+    msg[1] = (fullLen >> 16) & 0xff;
+    msg[2] = (fullLen >> 8) & 0xff;
+    msg[3] = fullLen & 0xff;
+    msg[4] = 19; // MSG_SELECT_PERK
+    msg[5] = perkId;
+    await this.writeMessage(msg);
   }
 }
 
