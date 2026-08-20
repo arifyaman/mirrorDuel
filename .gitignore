@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 server/main
+server/server
 server/bin/
 *.exe
 *.exe~
