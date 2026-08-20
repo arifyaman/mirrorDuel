@@ -9,7 +9,7 @@ const (
 	WaveStatePlaying      uint8 = 0
 	WaveStateIntermission uint8 = 1
 
-	WaveDuration         float32 = 60.0 // 60 seconds per wave
+	WaveDuration         float32 = 10.0 // 60 seconds per wave
 	IntermissionDuration float32 = 5.0  // 5 seconds between waves
 )
 
@@ -33,7 +33,7 @@ func NewWaveManager() *WaveManager {
 	wm := &WaveManager{
 		CurrentWave: 1,
 		State:       WaveStatePlaying,
-		Timer:       10.0,
+		Timer:       WaveDuration,
 		TotalKills:  0,
 	}
 	wm.setupWave(1)
@@ -44,34 +44,34 @@ func NewWaveManager() *WaveManager {
 func (wm *WaveManager) setupWave(wave int) {
 	wm.CurrentWave = wave
 	wm.State = WaveStatePlaying
-	wm.Timer = 10.0 // 10 seconds per wave
+	wm.Timer = WaveDuration // 60 seconds per wave
 	wm.SpawnTimer = 0
 	wm.ZombiesSpawned = 0
 
 	switch wave {
 	case 1:
-		// Wave 1 (10s round)
+		// Wave 1 (60s round)
 		wm.TotalWaveZombies = 6
 		wm.SpawnInterval = 1.4
 		wm.BaseZombieHP = 16.0
 		wm.BaseZombieSpeed = 2.3
 		wm.BaseZombieDamage = 8.0
 	case 2:
-		// Wave 2 (10s round)
+		// Wave 2 (60s round)
 		wm.TotalWaveZombies = 8
 		wm.SpawnInterval = 1.2
 		wm.BaseZombieHP = 24.0
 		wm.BaseZombieSpeed = 3.0
 		wm.BaseZombieDamage = 12.0
 	case 3:
-		// Wave 3 (10s round)
+		// Wave 3 (60s round)
 		wm.TotalWaveZombies = 11
 		wm.SpawnInterval = 1.0
 		wm.BaseZombieHP = 32.0
 		wm.BaseZombieSpeed = 3.3
 		wm.BaseZombieDamage = 16.0
 	default:
-		// Wave 4+ (10s round)
+		// Wave 4+ (60s round)
 		wm.TotalWaveZombies = 14 + (wave-4)*3
 		wm.SpawnInterval = 0.7
 		wm.BaseZombieHP = 32.0 + float32(wave-3)*6.0
